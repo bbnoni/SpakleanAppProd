@@ -92,6 +92,13 @@ def create_app():
         db.session.commit()
 
         return jsonify({"message": "User registered successfully"}), 201
+    
+    @app.route('/api/admin/users', methods=['GET'])
+    def get_users():
+        users = User.query.all()
+        users_data = [{'id': user.id, 'username': user.username} for user in users]
+        return jsonify({"users": users_data}), 200
+
 
     @app.route('/api/auth/login', methods=['POST'])
     def login():
