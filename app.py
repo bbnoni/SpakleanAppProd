@@ -70,6 +70,13 @@ def create_app():
             return f"<TaskSubmission {self.task_type} by User {self.user_id} in Room {self.room_id}>"
 
     # ROUTES
+
+    @app.route('/')
+    def index():
+     return jsonify({"message": "Welcome to the Spaklean API"}), 200
+
+
+
     @app.route('/api/auth/register', methods=['POST'])
     def register():
         data = request.get_json()
