@@ -73,13 +73,11 @@ def create_app():
 
     @app.route('/')
     def index():
-     return jsonify({"message": "Welcome to the Spaklean API"}), 200
+        return jsonify({"message": "Welcome to the Spaklean API"}), 200
     
     @app.route('/health', methods=['GET'])
     def health_check():
-     return jsonify({"status": "healthy"}), 200
-
-
+        return jsonify({"status": "healthy"}), 200
 
     @app.route('/api/auth/register', methods=['POST'])
     def register():
@@ -101,13 +99,23 @@ def create_app():
         username = data['username']
         password = data['password']
 
+        # Retrieve the user based on the provided username
         user = User.query.filter_by(username=username).first()
 
+        # Check if the user exists and the password is correct
         if user and bcrypt.check_password_hash(user.password_hash, password):
+            # Create an access token with the user's role and username in the identity payload
             access_token = create_access_token(identity={'username': user.username, 'role': user.role})
-            return jsonify(access_token=access_token), 200
+            
+            # Return the access_token along with the user's role in the response
+            return jsonify({
+                'access_token': access_token,
+                'role': user.role  # Returning the user's role here
+            }), 200
 
+        # If login fails, return a 401 error
         return jsonify({"message": "Invalid credentials"}), 401
+
 
     @app.route('/api/admin/create_office', methods=['POST'])
     def create_office():
