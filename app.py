@@ -74,6 +74,10 @@ def create_app():
     @app.route('/')
     def index():
      return jsonify({"message": "Welcome to the Spaklean API"}), 200
+    
+    @app.route('/health', methods=['GET'])
+    def health_check():
+     return jsonify({"status": "healthy"}), 200
 
 
 
