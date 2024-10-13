@@ -176,6 +176,21 @@ def create_app():
         db.session.commit()
 
         return jsonify({"message": "Task submitted successfully"}), 201
+    
+    @app.route('/api/users/<int:user_id>/offices', methods=['GET'])
+    def get_assigned_offices(user_id):
+        user = User.query.get(user_id)
+        
+        if not user:
+            return jsonify({"message": "User not found"}), 404
+
+        # Get all offices assigned to the user
+        assigned_offices = Office.query.filter_by(user_id=user_id).all()
+
+        offices_data = [{'id': office.id, 'name': office.name} for office in assigned_offices]
+
+        return jsonify({"offices": offices_data}), 200
+
 
     return app
 
