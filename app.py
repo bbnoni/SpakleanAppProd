@@ -117,7 +117,8 @@ def create_app():
             # Return the access_token along with the user's role in the response
             return jsonify({
                 'access_token': access_token,
-                'role': user.role  # Returning the user's role here
+                'role': user.role, # Returning the user's role here
+                'user_id': user.id  # Ensure you return user_id
             }), 200
 
         # If login fails, return a 401 error
