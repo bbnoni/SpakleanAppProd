@@ -51,11 +51,12 @@ def create_app():
     class Room(db.Model):
         id = db.Column(db.Integer, primary_key=True)
         name = db.Column(db.String(120), nullable=False)
+        zone = db.Column(db.String(120), nullable=False)  # Zone added to room
         office_id = db.Column(db.Integer, db.ForeignKey('office.id'), nullable=False)
         task_submissions = db.relationship('TaskSubmission', backref='room', lazy=True)
 
         def __repr__(self):
-            return f"<Room {self.name}>"
+            return f"<Room {self.name} in Zone {self.zone}>"
 
     class TaskSubmission(db.Model):
         id = db.Column(db.Integer, primary_key=True)
@@ -98,7 +99,6 @@ def create_app():
         users = User.query.all()
         users_data = [{'id': user.id, 'username': user.username} for user in users]
         return jsonify({"users": users_data}), 200
-
 
     @app.route('/api/auth/login', methods=['POST'])
     def login():
@@ -191,6 +191,46 @@ def create_app():
         offices_data = [{'id': office.id, 'name': office.name} for office in assigned_offices]
 
         return jsonify({"offices": offices_data}), 200
+
+    # New route to create office and room and assign them to a user and zone
+    @app.route('/api/admin/create_office_and_room', methods=['POST'])
+    def create_office_and_room():
+        data = request.get_json()
+        office_name = data['office_name']
+        room_name = data['room_name']
+        zone = data['zone']
+        user_id = data['user_id']
+        
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({"message": "User not found"}), 404
+
+        # Create the office
+        new_office = Office(name=office_name, user_id=user.id)
+        db.session.add(new_office)
+        db.session.commit()
+
+        # Create the room under the office and assign it to the zone
+        new_room = Room(name=room_name, zone=zone, office_id=new_office.id)
+        db.session.add(new_room)
+        db.session.commit()
+
+        return jsonify({"message": "Office and Room created successfully", "office_id": new_office.id, "room_id": new_room.id}), 201
+
+    # New route to get rooms by zone for a specific user
+    @app.route('/api/users/<int:user_id>/rooms/<string:zone>', methods=['GET'])
+    def get_rooms_by_zone(user_id, zone):
+        user = User.query.get(user_id)
+        
+        if not user:
+            return jsonify({"message": "User not found"}), 404
+
+        # Fetch rooms that belong to the user's offices and match the requested zone
+        rooms = Room.query.join(Office).filter(Office.user_id == user_id, Room.zone == zone).all()
+
+        rooms_data = [{'id': room.id, 'name': room.name, 'zone': room.zone} for room in rooms]
+
+        return jsonify({"rooms": rooms_data}), 200
 
 
     return app
