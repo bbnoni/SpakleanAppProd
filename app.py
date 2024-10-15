@@ -231,6 +231,21 @@ def create_app():
         rooms_data = [{'id': room.id, 'name': room.name, 'zone': room.zone} for room in rooms]
 
         return jsonify({"rooms": rooms_data}), 200
+    
+    @app.route('/api/users/<int:user_id>/tasks', methods=['GET'])
+    def get_tasks_by_user(user_id):
+        user = User.query.get(user_id)
+        
+        if not user:
+            return jsonify({"message": "User not found"}), 404
+
+        # Fetch task submissions for the user
+        tasks = TaskSubmission.query.filter_by(user_id=user_id).all()
+        
+        tasks_data = [{'task_type': task.task_type, 'date_submitted': task.date_submitted} for task in tasks]
+        
+        return jsonify({"tasks": tasks_data}), 200
+
 
     return app
 
