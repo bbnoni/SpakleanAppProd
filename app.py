@@ -217,7 +217,7 @@ def create_app():
 
         return jsonify({"message": "Office and Room created successfully", "office_id": new_office.id, "room_id": new_room.id}), 201
 
-    # Updated route to get rooms by zone and office for a specific user
+    # Updated route to get rooms by zone and office for a specific user #
     @app.route('/api/users/<int:user_id>/offices/<int:office_id>/rooms/<string:zone>', methods=['GET'])
     def get_rooms_by_office_and_zone(user_id, office_id, zone):
         user = User.query.get(user_id)
