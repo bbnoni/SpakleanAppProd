@@ -124,7 +124,6 @@ def create_app():
         # If login fails, return a 401 error
         return jsonify({"message": "Invalid credentials"}), 401
 
-
     @app.route('/api/admin/create_office', methods=['POST'])
     def create_office():
         data = request.get_json()
@@ -177,6 +176,7 @@ def create_app():
         db.session.commit()
 
         return jsonify({"message": "Task submitted successfully"}), 201
+
     
     @app.route('/api/users/<int:user_id>/offices', methods=['GET'])
     def get_assigned_offices(user_id):
@@ -192,7 +192,7 @@ def create_app():
 
         return jsonify({"offices": offices_data}), 200
 
-    # New route to create office and room and assign them to a user and zone
+    # Updated route to create office and room and assign them to a user and zone
     @app.route('/api/admin/create_office_and_room', methods=['POST'])
     def create_office_and_room():
         data = request.get_json()
@@ -217,21 +217,20 @@ def create_app():
 
         return jsonify({"message": "Office and Room created successfully", "office_id": new_office.id, "room_id": new_room.id}), 201
 
-    # New route to get rooms by zone for a specific user
-    @app.route('/api/users/<int:user_id>/rooms/<string:zone>', methods=['GET'])
-    def get_rooms_by_zone(user_id, zone):
+    # Updated route to get rooms by zone and office for a specific user
+    @app.route('/api/users/<int:user_id>/offices/<int:office_id>/rooms/<string:zone>', methods=['GET'])
+    def get_rooms_by_office_and_zone(user_id, office_id, zone):
         user = User.query.get(user_id)
-        
+
         if not user:
             return jsonify({"message": "User not found"}), 404
 
-        # Fetch rooms that belong to the user's offices and match the requested zone
-        rooms = Room.query.join(Office).filter(Office.user_id == user_id, Room.zone == zone).all()
+        # Fetch rooms that belong to the specific office and match the requested zone
+        rooms = Room.query.filter_by(office_id=office_id, zone=zone).all()
 
         rooms_data = [{'id': room.id, 'name': room.name, 'zone': room.zone} for room in rooms]
 
         return jsonify({"rooms": rooms_data}), 200
-
 
     return app
 
