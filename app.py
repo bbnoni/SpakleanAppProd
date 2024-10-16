@@ -33,6 +33,7 @@ def create_app():
         username = db.Column(db.String(64), unique=True, nullable=False)
         password_hash = db.Column(db.String(128), nullable=False)
         role = db.Column(db.String(20), nullable=False)
+        password_change_required = db.Column(db.Boolean, default=True)
         offices = db.relationship('Office', backref='user', lazy=True)
         task_submissions = db.relationship('TaskSubmission', backref='user', lazy=True)
 
@@ -249,31 +250,22 @@ def create_app():
     # Add this route or update the existing one in your Flask backend code
 
     @app.route('/api/auth/change_password', methods=['POST'])
-    @jwt_required()  # Requires the user to be authenticated
+    @jwt_required()
     def change_password():
         data = request.get_json()
-        
-        # Get current and new passwords from the request body
-        current_password = data.get('current_password')
-        new_password = data.get('new_password')
+        new_password = data['new_password']
+        user_id = data['user_id']
 
-        if not current_password or not new_password:
-            return jsonify({"message": "Both current and new passwords are required."}), 400
+        user = User.query.get(user_id)
 
-        # Get the current user identity from the JWT token
-        current_user = get_jwt_identity()
+        if user:
+            user.password_hash = bcrypt.generate_password_hash(new_password).decode('utf-8')
+            user.password_change_required = False  # Set to False after password change
+            db.session.commit()
 
-        # Retrieve the user based on the username from the JWT identity
-        user = User.query.filter_by(username=current_user['username']).first()
+            return jsonify({"message": "Password changed successfully."}), 200
 
-        if not user or not bcrypt.check_password_hash(user.password_hash, current_password):
-            return jsonify({"message": "Current password is incorrect."}), 401
-
-        # Hash the new password and update the user's record
-        user.password_hash = bcrypt.generate_password_hash(new_password).decode('utf-8')
-        db.session.commit()
-
-        return jsonify({"message": "Password changed successfully."}), 200
+        return jsonify({"message": "User not found."}), 404
 
 
 
