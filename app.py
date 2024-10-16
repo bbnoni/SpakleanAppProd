@@ -266,6 +266,32 @@ def create_app():
             return jsonify({"message": "Password changed successfully."}), 200
 
         return jsonify({"message": "User not found."}), 404
+    
+
+    @app.route('/api/auth/reset_password', methods=['POST'])
+    @jwt_required()  # Ensure the request is authenticated
+    def reset_password():
+        data = request.get_json()
+        user_id = data.get('user_id')
+        new_password = data.get('new_password')
+
+        # Check if the required fields are provided
+        if not user_id or not new_password:
+            return jsonify({"message": "User ID and new password are required"}), 400
+
+        # Find the user by user_id
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({"message": "User not found"}), 404
+
+        # Hash the new password and update the user's password
+        user.password_hash = bcrypt.generate_password_hash(new_password).decode('utf-8')
+        user.password_change_required = False  # Reset password change flag if it exists
+
+        db.session.commit()
+
+        return jsonify({"message": "Password reset successfully"}), 200
+
 
 
 
