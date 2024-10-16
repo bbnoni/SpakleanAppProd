@@ -286,7 +286,9 @@ def create_app():
 
         # Hash the new password and update the user's password
         user.password_hash = bcrypt.generate_password_hash(new_password).decode('utf-8')
-        user.password_change_required = False  # Reset password change flag if it exists
+        user.password_change_required = True  # User is required to change the password on next login
+        #user.password_change_required = False  # Reset password change flag if it exists
+
 
         db.session.commit()
 
