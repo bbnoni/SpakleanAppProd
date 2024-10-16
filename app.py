@@ -106,23 +106,23 @@ def create_app():
         username = data['username']
         password = data['password']
 
-        # Retrieve the user based on the provided username
         user = User.query.filter_by(username=username).first()
 
-        # Check if the user exists and the password is correct
         if user and bcrypt.check_password_hash(user.password_hash, password):
-            # Create an access token with the user's role and username in the identity payload
             access_token = create_access_token(identity={'username': user.username, 'role': user.role})
             
-            # Return the access_token along with the user's role in the response
+            # Check if user needs to change password (example: admin-created users)
+            password_change_required = user.password_change_required
+
             return jsonify({
                 'access_token': access_token,
-                'role': user.role, # Returning the user's role here
-                'user_id': user.id  # Ensure you return user_id
+                'role': user.role,
+                'user_id': user.id,
+                'password_change_required': password_change_required  # Include this in response
             }), 200
 
-        # If login fails, return a 401 error
         return jsonify({"message": "Invalid credentials"}), 401
+
 
     @app.route('/api/admin/create_office', methods=['POST'])
     def create_office():
@@ -246,13 +246,19 @@ def create_app():
         
         return jsonify({"tasks": tasks_data}), 200
 
-    # Add a new route for changing the password
+    # Add this route or update the existing one in your Flask backend code
+
     @app.route('/api/auth/change_password', methods=['POST'])
     @jwt_required()  # Requires the user to be authenticated
     def change_password():
         data = request.get_json()
-        current_password = data['current_password']
-        new_password = data['new_password']
+        
+        # Get current and new passwords from the request body
+        current_password = data.get('current_password')
+        new_password = data.get('new_password')
+
+        if not current_password or not new_password:
+            return jsonify({"message": "Both current and new passwords are required."}), 400
 
         # Get the current user identity from the JWT token
         current_user = get_jwt_identity()
@@ -268,6 +274,7 @@ def create_app():
         db.session.commit()
 
         return jsonify({"message": "Password changed successfully."}), 200
+
 
 
     return app
