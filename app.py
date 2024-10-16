@@ -2,7 +2,7 @@ from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from flask_bcrypt import Bcrypt
-from flask_jwt_extended import JWTManager, create_access_token
+from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 from flask_migrate import Migrate
 from datetime import datetime
 from config import Config
@@ -245,6 +245,29 @@ def create_app():
         tasks_data = [{'task_type': task.task_type, 'date_submitted': task.date_submitted} for task in tasks]
         
         return jsonify({"tasks": tasks_data}), 200
+
+    # Add a new route for changing the password
+    @app.route('/api/auth/change_password', methods=['POST'])
+    @jwt_required()  # Requires the user to be authenticated
+    def change_password():
+        data = request.get_json()
+        current_password = data['current_password']
+        new_password = data['new_password']
+
+        # Get the current user identity from the JWT token
+        current_user = get_jwt_identity()
+
+        # Retrieve the user based on the username from the JWT identity
+        user = User.query.filter_by(username=current_user['username']).first()
+
+        if not user or not bcrypt.check_password_hash(user.password_hash, current_password):
+            return jsonify({"message": "Current password is incorrect."}), 401
+
+        # Hash the new password and update the user's record
+        user.password_hash = bcrypt.generate_password_hash(new_password).decode('utf-8')
+        db.session.commit()
+
+        return jsonify({"message": "Password changed successfully."}), 200
 
 
     return app
