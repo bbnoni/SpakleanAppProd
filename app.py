@@ -305,6 +305,29 @@ def create_app():
         db.session.commit()
 
         return jsonify({"message": "Password reset successfully"}), 200
+    
+
+    @app.route('/api/admin/add_more_rooms', methods=['POST'])
+    def add_more_rooms():
+        data = request.get_json()
+        user_id = data.get('user_id')
+        office_id = data.get('office_id')
+        room_names = data.get('room_names')
+        zone = data.get('zone')
+
+        if not user_id or not office_id or not room_names or not zone:
+            return jsonify({"message": "Missing required fields"}), 400
+
+        # Assuming you have an Office and Room model to handle database records
+        for room_name in room_names:
+            new_room = Room(name=room_name, office_id=office_id, zone=zone)
+            db.session.add(new_room)
+
+        db.session.commit()
+
+        return jsonify({"message": "Rooms added successfully"}), 200
+
+    
 
 
 
