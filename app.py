@@ -189,9 +189,21 @@ def create_app():
         # Get all offices assigned to the user
         assigned_offices = Office.query.filter_by(user_id=user_id).all()
 
-        offices_data = [{'id': office.id, 'name': office.name} for office in assigned_offices]
+        if not assigned_offices:
+            return jsonify({"message": "No offices assigned to this user"}), 200
+
+        offices_data = []
+        for office in assigned_offices:
+            # Count the number of rooms in each office
+            room_count = Room.query.filter_by(office_id=office.id).count()
+            offices_data.append({
+                'id': office.id,
+                'name': office.name,
+                'room_count': room_count,  # Add room count to the response
+            })
 
         return jsonify({"offices": offices_data}), 200
+
 
     # Updated route to create office and room and assign them to a user and zone
     @app.route('/api/admin/create_office_and_room', methods=['POST'])
