@@ -205,12 +205,13 @@ def create_app():
         return jsonify({"offices": offices_data}), 200
 
 
-    # Updated route to create office and room and assign them to a user and zone
+    
+    # Updated route to create office and room(s) and assign them to a user and zone
     @app.route('/api/admin/create_office_and_room', methods=['POST'])
     def create_office_and_room():
         data = request.get_json()
         office_name = data['office_name']
-        room_name = data['room_name']
+        room_names = data['room_names']  # Expecting a list of room names
         zone = data['zone']
         user_id = data['user_id']
         
@@ -223,12 +224,24 @@ def create_app():
         db.session.add(new_office)
         db.session.commit()
 
-        # Create the room under the office and assign it to the zone
-        new_room = Room(name=room_name, zone=zone, office_id=new_office.id)
-        db.session.add(new_room)
-        db.session.commit()
+        # List to store the created room IDs
+        room_ids = []
 
-        return jsonify({"message": "Office and Room created successfully", "office_id": new_office.id, "room_id": new_room.id}), 201
+        # Create each room under the office and assign it to the zone
+        for room_name in room_names:
+            new_room = Room(name=room_name, zone=zone, office_id=new_office.id)
+            db.session.add(new_room)
+            db.session.commit()  # Commit each room individually (optional)
+
+            # Append the room ID to the list
+            room_ids.append(new_room.id)
+
+        return jsonify({
+            "message": "Office and Rooms created successfully",
+            "office_id": new_office.id,
+            "room_ids": room_ids
+        }), 201
+
 
     # Updated route to get rooms by zone and office for a specific user #
     @app.route('/api/users/<int:user_id>/offices/<int:office_id>/rooms/<string:zone>', methods=['GET'])
