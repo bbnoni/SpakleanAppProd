@@ -7,7 +7,7 @@ from flask_migrate import Migrate
 from datetime import datetime
 from config import Config
 import json  # Needed for handling area_scores JSON field
-from mail_utils import send_mailjet_email  # Import the helper function
+from mail_utils import send_mailjet_email  # Import the helper function#
 
 # Initialize extensions
 db = SQLAlchemy()
