@@ -197,7 +197,7 @@ def create_app():
 
         return jsonify({"message": "Task submitted successfully"}), 201
 
-    # Route to retrieve the most recent report for a room
+    # Route to retrieve the most recent report for a room //
     @app.route('/api/rooms/<int:room_id>/report', methods=['GET'])
     def get_room_report(room_id):
         task = TaskSubmission.query.filter_by(room_id=room_id).order_by(TaskSubmission.date_submitted.desc()).first()
@@ -208,7 +208,7 @@ def create_app():
         area_scores = json.loads(task.area_scores) if task.area_scores else {}  # Convert JSON string back to dict
 
         return jsonify({
-            "room_name": task.room.name,
+            "room_name": task.room.name, 
             "room_score": task.room_score,
             "area_scores": area_scores,
             "zone_name": task.zone_name
