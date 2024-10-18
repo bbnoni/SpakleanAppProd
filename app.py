@@ -6,6 +6,7 @@ from flask_jwt_extended import JWTManager, create_access_token, jwt_required, ge
 from flask_migrate import Migrate
 from datetime import datetime
 from config import Config
+import json  # Needed for handling area_scores JSON field
 
 # Initialize extensions
 db = SQLAlchemy()
@@ -59,6 +60,7 @@ def create_app():
         def __repr__(self):
             return f"<Room {self.name} in Zone {self.zone}>"
 
+    # Add room_score, area_scores (JSON), and zone_name to TaskSubmission
     class TaskSubmission(db.Model):
         id = db.Column(db.Integer, primary_key=True)
         task_type = db.Column(db.String(100), nullable=False)  # Type of task performed, e.g., 'Cleaning'
@@ -67,6 +69,9 @@ def create_app():
         longitude = db.Column(db.Float, nullable=True)
         user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
         room_id = db.Column(db.Integer, db.ForeignKey('room.id'), nullable=False)  # To link the task submission to a room
+        room_score = db.Column(db.Float, nullable=True)  # Room score for the inspection
+        area_scores = db.Column(db.Text, nullable=True)  # Area scores stored as JSON text
+        zone_name = db.Column(db.String(120), nullable=True)  # Zone name for this task
 
         def __repr__(self):
             return f"<TaskSubmission {self.task_type} by User {self.user_id} in Room {self.room_id}>"
@@ -157,6 +162,7 @@ def create_app():
 
         return jsonify({"message": "Room created successfully"}), 201
 
+    # Add room_score, area_scores (JSON), and zone_name handling in this route
     @app.route('/api/tasks/submit', methods=['POST'])
     def submit_task():
         data = request.get_json()
@@ -165,6 +171,9 @@ def create_app():
         longitude = data.get('longitude')
         user_id = data['user_id']
         room_id = data['room_id']
+        room_score = data.get('room_score')  # Get room score
+        area_scores = json.dumps(data.get('area_scores'))  # Convert area scores to JSON string
+        zone_name = data.get('zone_name')  # Get zone name
 
         user = User.query.get(user_id)
         room = Room.query.get(room_id)
@@ -172,13 +181,61 @@ def create_app():
         if not user or not room:
             return jsonify({"message": "User or Room not found"}), 404
 
-        new_task = TaskSubmission(task_type=task_type, latitude=latitude, longitude=longitude, user_id=user.id, room_id=room.id)
+        new_task = TaskSubmission(
+            task_type=task_type,
+            latitude=latitude,
+            longitude=longitude,
+            user_id=user.id,
+            room_id=room.id,
+            room_score=room_score,  # Save room score
+            area_scores=area_scores,  # Save area scores (as JSON)
+            zone_name=zone_name  # Save zone name
+        )
+        
         db.session.add(new_task)
         db.session.commit()
 
         return jsonify({"message": "Task submitted successfully"}), 201
 
-    
+    # Route to retrieve the most recent report for a room
+    @app.route('/api/rooms/<int:room_id>/report', methods=['GET'])
+    def get_room_report(room_id):
+        task = TaskSubmission.query.filter_by(room_id=room_id).order_by(TaskSubmission.date_submitted.desc()).first()
+
+        if not task:
+            return jsonify({"message": "No task submission found for this room"}), 404
+
+        area_scores = json.loads(task.area_scores) if task.area_scores else {}  # Convert JSON string back to dict
+
+        return jsonify({
+            "room_name": task.room.name,
+            "room_score": task.room_score,
+            "area_scores": area_scores,
+            "zone_name": task.zone_name
+        }), 200
+
+    # Route to get all task submissions for a specific room
+    @app.route('/api/rooms/<int:room_id>/tasks', methods=['GET'])
+    def get_tasks_by_room(room_id):
+        tasks = TaskSubmission.query.filter_by(room_id=room_id).all()
+
+        if not tasks:
+            return jsonify({"message": "No tasks found for this room"}), 404
+
+        tasks_data = []
+        for task in tasks:
+            tasks_data.append({
+                "task_type": task.task_type,
+                "date_submitted": task.date_submitted,
+                "room_score": task.room_score,
+                "area_scores": json.loads(task.area_scores) if task.area_scores else {},
+                "zone_name": task.zone_name,
+                "latitude": task.latitude,
+                "longitude": task.longitude
+            })
+
+        return jsonify({"tasks": tasks_data}), 200
+
     @app.route('/api/users/<int:user_id>/offices', methods=['GET'])
     def get_assigned_offices(user_id):
         user = User.query.get(user_id)
@@ -205,7 +262,6 @@ def create_app():
         return jsonify({"offices": offices_data}), 200
 
 
-    
     # Updated route to create office and room(s) and assign them to a user and zone
     @app.route('/api/admin/create_office_and_room', methods=['POST'])
     def create_office_and_room():
@@ -242,8 +298,6 @@ def create_app():
             "room_ids": room_ids
         }), 201
 
-
-    # Updated route to get rooms by zone and office for a specific user #
     @app.route('/api/users/<int:user_id>/offices/<int:office_id>/rooms/<string:zone>', methods=['GET'])
     def get_rooms_by_office_and_zone(user_id, office_id, zone):
         user = User.query.get(user_id)
@@ -271,8 +325,6 @@ def create_app():
         tasks_data = [{'task_type': task.task_type, 'date_submitted': task.date_submitted} for task in tasks]
         
         return jsonify({"tasks": tasks_data}), 200
-
-    # Add this route or update the existing one in your Flask backend code
 
     @app.route('/api/auth/change_password', methods=['POST'])
     @jwt_required()
