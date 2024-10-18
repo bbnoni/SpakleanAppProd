@@ -7,6 +7,7 @@ from flask_migrate import Migrate
 from datetime import datetime
 from config import Config
 import json  # Needed for handling area_scores JSON field
+from mail_utils import send_mailjet_email  # Import the helper function
 
 # Initialize extensions
 db = SQLAlchemy()
@@ -97,6 +98,11 @@ def create_app():
         new_user = User(username=username, password_hash=password_hash, role=role)
         db.session.add(new_user)
         db.session.commit()
+        
+        # Send a welcome email via Mailjet
+        subject = "Welcome to Spaklean"
+        content = f"Hello {username},\n\nYour account has been created successfully. You can now log in using your credentials."
+        send_mailjet_email(username, subject, content)
 
         return jsonify({"message": "User registered successfully"}), 201
     
