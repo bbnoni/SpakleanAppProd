@@ -13,7 +13,7 @@ def send_mailjet_email(recipient_email, subject, content):
         "Messages": [
             {
                 "From": {
-                    "Email": "benoni.okaikoi@gmail.com",
+                    "Email": "benoniokaikoi23@gmail.com",
                     "Name": "Spaklean"
                 },
                 "To": [
