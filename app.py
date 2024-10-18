@@ -8,6 +8,7 @@ from datetime import datetime
 from config import Config
 import json  # Needed for handling area_scores JSON field
 from mail_utils import send_mailjet_email  # Import the helper function#
+import requests
 
 # Initialize extensions
 db = SQLAlchemy()

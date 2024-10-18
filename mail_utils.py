@@ -1,21 +1,19 @@
 import requests
+from requests.auth import HTTPBasicAuth
 
-MAILJET_API_KEY = '14457ec97ed4c8e4085afaa588501405'
-MAILJET_SECRET_KEY = '7b173043991ac2523e7753a4f970c815'
+# Mailjet API Keys
+MAILJET_API_KEY = '7b173043991ac2523e7753a4f970c815'
+MAILJET_SECRET_KEY = '14457ec97ed4c8e4085afaa588501405'
 
 def send_mailjet_email(recipient_email, subject, content):
     url = "https://api.mailjet.com/v3.1/send"
-    
-    headers = {
-        'Content-Type': 'application/json',
-        'Authorization': f'Basic {MAILJET_API_KEY}:{MAILJET_SECRET_KEY}'
-    }
-    
+
+    # Email content data
     data = {
         "Messages": [
             {
                 "From": {
-                    "Email": "no-reply@spalean.com",
+                    "Email": "benoni.okaikoi@gmail.com",
                     "Name": "Spaklean"
                 },
                 "To": [
@@ -29,12 +27,23 @@ def send_mailjet_email(recipient_email, subject, content):
             }
         ]
     }
-    
+
     try:
-        response = requests.post(url, headers=headers, json=data)
-        if response.status_code == 200 or response.status_code == 201:
+        # Send request using Basic Auth
+        response = requests.post(
+            url,
+            auth=HTTPBasicAuth(MAILJET_API_KEY, MAILJET_SECRET_KEY),  # Correct way to authenticate
+            json=data
+        )
+        
+        # Check the response
+        if response.status_code in [200, 201]:
             print(f"Email sent to {recipient_email}")
         else:
-            print(f"Failed to send email: {response.text}")
+            print(f"Failed to send email: {response.status_code} - {response.text}")
+
     except Exception as e:
         print(f"Error sending email: {e}")
+
+# Example usage
+#send_mailjet_email("benoni.okaikoi@gmail.com", "Test Subject", "This is a test email.")
