@@ -171,9 +171,10 @@ def create_app():
         longitude = data.get('longitude')
         user_id = data['user_id']
         room_id = data['room_id']
-        room_score = data.get('room_score')  # Get room score
-        area_scores = json.dumps(data.get('area_scores'))  # Convert area scores to JSON string
-        zone_name = data.get('zone_name')  # Get zone name
+        zone_name = data.get('zone_name')
+
+        # Get area selections (defects) from the request
+        area_selections = data.get('area_selections', {})  # Expecting a dict like {'CEILING': ['Cobweb', 'Dust'], 'WALLS': ['None'], ...}
 
         user = User.query.get(user_id)
         room = Room.query.get(room_id)
@@ -181,21 +182,63 @@ def create_app():
         if not user or not room:
             return jsonify({"message": "User or Room not found"}), 404
 
+        # Define the list of areas and their defects
+        defect_options = {
+            'CEILING': ['Cobweb', 'Dust', 'Mold', 'Stains', 'None', 'N/A'],
+            'WALLS': ['Cobweb', 'Dust', 'Marks', 'Mold', 'Stains', 'None', 'N/A'],
+            'CTP': ['Dust', 'Marks', 'None', 'N/A'],
+            'WINDOWS': ['Cobweb', 'Droppings', 'Dust', 'Fingerprints', 'Water stains', 'None', 'N/A'],
+            'EQUIPMENT': ['Dust', 'Cobweb', 'Stains', 'Fingerprints', 'None', 'N/A'],
+            'FURNITURE': ['Clutter', 'Cobweb', 'Dust', 'Fingerprints', 'Stains', 'None', 'N/A'],
+            'DECOR': ['Dust', 'Cobweb', 'None', 'N/A'],
+            'FLOOR': ['Clutter', 'Corner Stains', 'Droppings', 'Dust', 'Mold', 'None', 'N/A'],
+            'CARPET': ['Clutter', 'Droppings', 'Dust', 'Stains', 'None', 'N/A'],
+            'YARD': ['Trash', 'Weeds', 'Cobweb', 'None', 'N/A'],
+            'SANITARY WARE': ['Stains', 'Dust', 'Mold', 'None', 'N/A']
+        }
+
+        # Initialize an empty dict to store area scores
+        area_scores = {}
+
+        # Loop through each area and calculate the score
+        for area, defects in defect_options.items():
+            selected_defects = set(area_selections.get(area, []))  # Get the selected defects for the area
+
+            if 'None' in selected_defects or 'N/A' in selected_defects:
+                # If 'None' or 'N/A' is selected, the area is perfect (100%)
+                area_scores[area] = 100
+            else:
+                # Calculate the score based on the number of defects selected
+                total_defects = len(defects) - 2  # Exclude 'None' and 'N/A'
+                selected_defects_count = len(selected_defects)
+                defect_free_count = total_defects - selected_defects_count
+
+                # Calculate the percentage score for the area
+                area_scores[area] = (defect_free_count / total_defects) * 100
+
+        # Calculate the room score as the average of all area scores
+        room_score = sum(area_scores.values()) / len(area_scores) if area_scores else 0
+
+        # Convert area scores to JSON for storage
+        area_scores_json = json.dumps(area_scores)
+
+        # Save the task submission with area scores and room score
         new_task = TaskSubmission(
             task_type=task_type,
             latitude=latitude,
             longitude=longitude,
             user_id=user.id,
             room_id=room.id,
-            room_score=room_score,  # Save room score
-            area_scores=area_scores,  # Save area scores (as JSON)
-            zone_name=zone_name  # Save zone name
+            room_score=room_score,  # Calculated room score
+            area_scores=area_scores_json,  # JSON-encoded area scores
+            zone_name=zone_name
         )
         
         db.session.add(new_task)
         db.session.commit()
 
         return jsonify({"message": "Task submitted successfully"}), 201
+
 
     # Route to retrieve the most recent report for a room //
     @app.route('/api/rooms/<int:room_id>/report', methods=['GET'])
@@ -205,14 +248,16 @@ def create_app():
         if not task:
             return jsonify({"message": "No task submission found for this room"}), 404
 
-        area_scores = json.loads(task.area_scores) if task.area_scores else {}  # Convert JSON string back to dict
+        # Decode the area_scores from JSON
+        area_scores = json.loads(task.area_scores) if task.area_scores else {}
 
         return jsonify({
-            "room_name": task.room.name, 
+            "room_name": task.room.name,
             "room_score": task.room_score,
-            "area_scores": area_scores,
+            "area_scores": area_scores,  # Include area scores in the response
             "zone_name": task.zone_name
         }), 200
+
 
     # Route to get all task submissions for a specific room
     @app.route('/api/rooms/<int:room_id>/tasks', methods=['GET'])
@@ -391,6 +436,67 @@ def create_app():
         db.session.commit()
 
         return jsonify({"message": "Rooms added successfully"}), 200
+    
+    
+    @app.route('/api/zones/<string:zone_name>/score', methods=['GET'])
+    def get_zone_score(zone_name):
+        rooms = Room.query.filter_by(zone=zone_name).all()
+
+        if not rooms:
+            return jsonify({"message": "No rooms found in this zone"}), 404
+
+        total_room_score = 0
+        room_count = 0
+
+        for room in rooms:
+            task = TaskSubmission.query.filter_by(room_id=room.id).order_by(TaskSubmission.date_submitted.desc()).first()
+            if task:
+                total_room_score += task.room_score
+                room_count += 1
+
+        if room_count == 0:
+            return jsonify({"message": "No tasks found in this zone"}), 404
+
+        zone_score = total_room_score / room_count
+
+        return jsonify({"zone_name": zone_name, "zone_score": zone_score}), 200
+    
+
+    @app.route('/api/facility/score', methods=['GET'])
+    def get_total_facility_score():
+        zones = db.session.query(Room.zone).distinct().all()  # Get all unique zones
+
+        if not zones:
+            return jsonify({"message": "No zones found"}), 404
+
+        total_zone_score = 0
+        zone_count = 0
+
+        for zone in zones:
+            zone_name = zone[0]  # Fetch zone name from tuple
+            rooms = Room.query.filter_by(zone=zone_name).all()
+            total_room_score = 0
+            room_count = 0
+
+            for room in rooms:
+                task = TaskSubmission.query.filter_by(room_id=room.id).order_by(TaskSubmission.date_submitted.desc()).first()
+                if task:
+                    total_room_score += task.room_score
+                    room_count += 1
+
+            if room_count > 0:
+                zone_score = total_room_score / room_count
+                total_zone_score += zone_score
+                zone_count += 1
+
+        if zone_count == 0:
+            return jsonify({"message": "No zones with room scores found"}), 404
+
+        total_facility_score = total_zone_score / zone_count
+
+        return jsonify({"total_facility_score": total_facility_score}), 200
+
+
 
     
 
