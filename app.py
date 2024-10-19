@@ -426,6 +426,7 @@ def create_app():
     
     @app.route('/api/zones/<string:zone_name>/score', methods=['GET'])
     def get_zone_score(zone_name):
+        # Fetch all rooms in the zone
         rooms = Room.query.filter_by(zone=zone_name).all()
 
         if not rooms:
@@ -434,24 +435,29 @@ def create_app():
         total_room_score = 0
         room_count = 0
 
+        # Loop through each room and fetch the latest task submission
         for room in rooms:
             task = TaskSubmission.query.filter_by(room_id=room.id).order_by(TaskSubmission.date_submitted.desc()).first()
             if task:
                 total_room_score += task.room_score
                 room_count += 1
 
+        # If no tasks found for the zone
         if room_count == 0:
-            return jsonify({"message": "No tasks found in this zone"}), 404
+            return jsonify({"message": "No tasks found for this zone"}), 404
 
+        # Calculate the average room score for the zone
         zone_score = total_room_score / room_count
 
         return jsonify({"zone_name": zone_name, "zone_score": zone_score}), 200
+
 
     
 
     @app.route('/api/facility/score', methods=['GET'])
     def get_total_facility_score():
-        zones = db.session.query(Room.zone).distinct().all()  # Get all unique zones
+        # Fetch all unique zones from the Room table
+        zones = db.session.query(Room.zone).distinct().all()
 
         if not zones:
             return jsonify({"message": "No zones found"}), 404
@@ -459,29 +465,35 @@ def create_app():
         total_zone_score = 0
         zone_count = 0
 
+        # Loop through each zone and calculate the zone score
         for zone in zones:
-            zone_name = zone[0]  # Fetch zone name from tuple
+            zone_name = zone[0]  # Zone name is fetched as a tuple (zone,)
             rooms = Room.query.filter_by(zone=zone_name).all()
             total_room_score = 0
             room_count = 0
 
+            # Calculate the average room score for each zone
             for room in rooms:
                 task = TaskSubmission.query.filter_by(room_id=room.id).order_by(TaskSubmission.date_submitted.desc()).first()
                 if task:
                     total_room_score += task.room_score
                     room_count += 1
 
+            # Skip zones with no tasks
             if room_count > 0:
                 zone_score = total_room_score / room_count
                 total_zone_score += zone_score
                 zone_count += 1
 
+        # If no zones have room scores
         if zone_count == 0:
             return jsonify({"message": "No zones with room scores found"}), 404
 
+        # Calculate the total facility score as the average of all zone scores
         total_facility_score = total_zone_score / zone_count
 
         return jsonify({"total_facility_score": total_facility_score}), 200
+
     
     
 
