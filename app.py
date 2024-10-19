@@ -173,13 +173,15 @@ def create_app():
     @app.route('/api/tasks/submit', methods=['POST'])
     def submit_task():
         data = request.get_json()
-        task_type = data['task_type']
+        task_type = data.get('task_type')
         latitude = data.get('latitude')
         longitude = data.get('longitude')
-        user_id = data['user_id']
-        room_id = data['room_id']
-        area_scores = data.get('area_scores', {})  # This must be handled correctly
+        user_id = data.get('user_id')
+        room_id = data.get('room_id')
+        area_scores = data.get('area_scores', {})  # Safely get area_scores
+        zone_name = data.get('zone_name')  # Expect zone_name from the frontend (optional)
 
+        # Retrieve the user and room from the database
         user = User.query.get(user_id)
         room = Room.query.get(room_id)
 
@@ -187,7 +189,10 @@ def create_app():
             return jsonify({"message": "User or Room not found"}), 404
 
         # Calculate the room score as the average of area scores
-        room_score = sum(area_scores.values()) / len(area_scores) if area_scores else 0
+        if area_scores:
+            room_score = sum(area_scores.values()) / len(area_scores)
+        else:
+            room_score = 0
 
         # Save the task submission with area scores and room score
         new_task = TaskSubmission(
@@ -198,12 +203,15 @@ def create_app():
             room_id=room.id,
             room_score=room_score,  # Calculated room score
             area_scores=json.dumps(area_scores),  # Store the area scores as JSON
+            zone_name=zone_name  # Save the zone name
         )
         
+        # Save to the database
         db.session.add(new_task)
         db.session.commit()
 
         return jsonify({"message": "Task submitted successfully"}), 201
+
 
 
 
@@ -331,12 +339,23 @@ def create_app():
         if not user:
             return jsonify({"message": "User not found"}), 404
 
-        # Fetch task submissions for the user
+        # Fetch all task submissions for the user
         tasks = TaskSubmission.query.filter_by(user_id=user_id).all()
-        
-        tasks_data = [{'task_type': task.task_type, 'date_submitted': task.date_submitted} for task in tasks]
-        
+
+        tasks_data = []
+        for task in tasks:
+            tasks_data.append({
+                "task_type": task.task_type,
+                "date_submitted": task.date_submitted.isoformat(),  # Convert datetime to ISO format string
+                "room_score": task.room_score if task.room_score else "Not available",  # Handle null scores
+                "zone_name": task.zone_name if task.zone_name else "N/A",  # Handle null zones
+                "latitude": task.latitude if task.latitude else "Not available",  # Handle missing lat/long
+                "longitude": task.longitude if task.longitude else "Not available",
+                "area_scores": json.loads(task.area_scores) if task.area_scores else {}  # Parse area_scores JSON
+            })
+
         return jsonify({"tasks": tasks_data}), 200
+
 
     @app.route('/api/auth/change_password', methods=['POST'])
     @jwt_required()
@@ -463,6 +482,8 @@ def create_app():
         total_facility_score = total_zone_score / zone_count
 
         return jsonify({"total_facility_score": total_facility_score}), 200
+    
+    
 
 
 
