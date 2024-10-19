@@ -395,7 +395,7 @@ def create_app():
         if not user_id or not office_id or not room_names or not zone:
             return jsonify({"message": "Missing required fields"}), 400
 
-        # Assuming you have an Office and Room model to handle database records
+        # Assuming you have an Office and Room model to handle database records#
         for room_name in room_names:
             new_room = Room(name=room_name, office_id=office_id, zone=zone)
             db.session.add(new_room)
