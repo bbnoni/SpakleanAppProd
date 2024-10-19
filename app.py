@@ -366,7 +366,9 @@ def create_app():
                 "zone_name": task.zone_name if task.zone_name else "N/A",  # Handle null zones
                 "latitude": task.latitude if task.latitude else "Not available",  # Handle missing lat/long
                 "longitude": task.longitude if task.longitude else "Not available",
-                "area_scores": json.loads(task.area_scores) if task.area_scores else {}  # Parse area_scores JSON
+                "area_scores": json.loads(task.area_scores) if task.area_scores else {},  # Parse area_scores JSON
+                "zone_score": task.zone_score if task.zone_score else "N/A",  # Include zone score
+                "facility_score": task.facility_score if task.facility_score else "N/A"  # Include facility score
             })
 
         return jsonify({"tasks": tasks_data}), 200
