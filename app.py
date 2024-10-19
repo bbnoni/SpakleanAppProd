@@ -170,6 +170,7 @@ def create_app():
         return jsonify({"message": "Room created successfully"}), 201
 
     # Add room_score, area_scores (JSON), and zone_name handling in this route
+    # Add room_score, area_scores (JSON), and zone_name handling in this route
     @app.route('/api/tasks/submit', methods=['POST'])
     def submit_task():
         data = request.get_json()
@@ -178,56 +179,14 @@ def create_app():
         longitude = data.get('longitude')
         user_id = data['user_id']
         room_id = data['room_id']
+        area_scores = data.get('area_scores')  # This must be handled correctly
         zone_name = data.get('zone_name')
-
-        # Get area selections (defects) from the request
-        area_selections = data.get('area_selections', {})  # Expecting a dict like {'CEILING': ['Cobweb', 'Dust'], 'WALLS': ['None'], ...}
 
         user = User.query.get(user_id)
         room = Room.query.get(room_id)
 
         if not user or not room:
             return jsonify({"message": "User or Room not found"}), 404
-
-        # Define the list of areas and their defects
-        defect_options = {
-            'CEILING': ['Cobweb', 'Dust', 'Mold', 'Stains', 'None', 'N/A'],
-            'WALLS': ['Cobweb', 'Dust', 'Marks', 'Mold', 'Stains', 'None', 'N/A'],
-            'CTP': ['Dust', 'Marks', 'None', 'N/A'],
-            'WINDOWS': ['Cobweb', 'Droppings', 'Dust', 'Fingerprints', 'Water stains', 'None', 'N/A'],
-            'EQUIPMENT': ['Dust', 'Cobweb', 'Stains', 'Fingerprints', 'None', 'N/A'],
-            'FURNITURE': ['Clutter', 'Cobweb', 'Dust', 'Fingerprints', 'Stains', 'None', 'N/A'],
-            'DECOR': ['Dust', 'Cobweb', 'None', 'N/A'],
-            'FLOOR': ['Clutter', 'Corner Stains', 'Droppings', 'Dust', 'Mold', 'None', 'N/A'],
-            'CARPET': ['Clutter', 'Droppings', 'Dust', 'Stains', 'None', 'N/A'],
-            'YARD': ['Trash', 'Weeds', 'Cobweb', 'None', 'N/A'],
-            'SANITARY WARE': ['Stains', 'Dust', 'Mold', 'None', 'N/A']
-        }
-
-        # Initialize an empty dict to store area scores
-        area_scores = {}
-
-        # Loop through each area and calculate the score
-        for area, defects in defect_options.items():
-            selected_defects = set(area_selections.get(area, []))  # Get the selected defects for the area
-
-            if 'None' in selected_defects or 'N/A' in selected_defects:
-                # If 'None' or 'N/A' is selected, the area is perfect (100%)
-                area_scores[area] = 100
-            else:
-                # Calculate the score based on the number of defects selected
-                total_defects = len(defects) - 2  # Exclude 'None' and 'N/A'
-                selected_defects_count = len(selected_defects)
-                defect_free_count = total_defects - selected_defects_count
-
-                # Calculate the percentage score for the area
-                area_scores[area] = (defect_free_count / total_defects) * 100
-
-        # Calculate the room score as the average of all area scores
-        room_score = sum(area_scores.values()) / len(area_scores) if area_scores else 0
-
-        # Convert area scores to JSON for storage
-        area_scores_json = json.dumps(area_scores)
 
         # Save the task submission with area scores and room score
         new_task = TaskSubmission(
@@ -236,8 +195,8 @@ def create_app():
             longitude=longitude,
             user_id=user.id,
             room_id=room.id,
-            room_score=room_score,  # Calculated room score
-            area_scores=area_scores_json,  # JSON-encoded area scores
+            room_score=sum(area_scores.values()) / len(area_scores),  # Calculate room score
+            area_scores=json.dumps(area_scores),  # Save the area scores as JSON
             zone_name=zone_name
         )
         
@@ -245,6 +204,7 @@ def create_app():
         db.session.commit()
 
         return jsonify({"message": "Task submitted successfully"}), 201
+
 
 
     # Route to retrieve the most recent report for a room //
