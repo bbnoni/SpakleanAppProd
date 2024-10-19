@@ -170,7 +170,6 @@ def create_app():
         return jsonify({"message": "Room created successfully"}), 201
 
     # Add room_score, area_scores (JSON), and zone_name handling in this route
-    # Add room_score, area_scores (JSON), and zone_name handling in this route
     @app.route('/api/tasks/submit', methods=['POST'])
     def submit_task():
         data = request.get_json()
@@ -179,14 +178,16 @@ def create_app():
         longitude = data.get('longitude')
         user_id = data['user_id']
         room_id = data['room_id']
-        area_scores = data.get('area_scores')  # This must be handled correctly
-        zone_name = data.get('zone_name')
+        area_scores = data.get('area_scores', {})  # This must be handled correctly
 
         user = User.query.get(user_id)
         room = Room.query.get(room_id)
 
         if not user or not room:
             return jsonify({"message": "User or Room not found"}), 404
+
+        # Calculate the room score as the average of area scores
+        room_score = sum(area_scores.values()) / len(area_scores) if area_scores else 0
 
         # Save the task submission with area scores and room score
         new_task = TaskSubmission(
@@ -195,9 +196,8 @@ def create_app():
             longitude=longitude,
             user_id=user.id,
             room_id=room.id,
-            room_score=sum(area_scores.values()) / len(area_scores),  # Calculate room score
-            area_scores=json.dumps(area_scores),  # Save the area scores as JSON
-            zone_name=zone_name
+            room_score=room_score,  # Calculated room score
+            area_scores=json.dumps(area_scores),  # Store the area scores as JSON
         )
         
         db.session.add(new_task)
@@ -427,6 +427,7 @@ def create_app():
         zone_score = total_room_score / room_count
 
         return jsonify({"zone_name": zone_name, "zone_score": zone_score}), 200
+
     
 
     @app.route('/api/facility/score', methods=['GET'])
