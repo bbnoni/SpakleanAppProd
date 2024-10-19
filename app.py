@@ -74,6 +74,8 @@ def create_app():
         room_score = db.Column(db.Float, nullable=True)  # Room score for the inspection
         area_scores = db.Column(db.Text, nullable=True)  # Area scores stored as JSON text
         zone_name = db.Column(db.String(120), nullable=True)  # Zone name for this task
+        zone_score = db.Column(db.Float, nullable=True)  # New field for zone score
+        facility_score = db.Column(db.Float, nullable=True)  # New field for facility score
 
         def __repr__(self):
             return f"<TaskSubmission {self.task_type} by User {self.user_id} in Room {self.room_id}>"
@@ -173,44 +175,46 @@ def create_app():
     @app.route('/api/tasks/submit', methods=['POST'])
     def submit_task():
         data = request.get_json()
-        task_type = data.get('task_type')
+        task_type = data['task_type']
         latitude = data.get('latitude')
         longitude = data.get('longitude')
-        user_id = data.get('user_id')
-        room_id = data.get('room_id')
-        area_scores = data.get('area_scores', {})  # Safely get area_scores
-        zone_name = data.get('zone_name')  # Expect zone_name from the frontend (optional)
+        user_id = data['user_id']
+        room_id = data['room_id']
+        area_scores = data.get('area_scores', {})
 
-        # Retrieve the user and room from the database
         user = User.query.get(user_id)
         room = Room.query.get(room_id)
 
         if not user or not room:
             return jsonify({"message": "User or Room not found"}), 404
 
-        # Calculate the room score as the average of area scores
-        if area_scores:
-            room_score = sum(area_scores.values()) / len(area_scores)
-        else:
-            room_score = 0
+        # Calculate room score as the average of area scores
+        room_score = sum(area_scores.values()) / len(area_scores) if area_scores else 0
 
-        # Save the task submission with area scores and room score
+        # Fetch zone score and facility score at submission time
+        zone_name = room.zone
+        zone_score = get_zone_score(zone_name)  # Fetch zone score from function
+        facility_score = get_total_facility_score()  # Fetch facility score from function
+
+        # Save the task submission with zone and facility scores
         new_task = TaskSubmission(
             task_type=task_type,
             latitude=latitude,
             longitude=longitude,
             user_id=user.id,
             room_id=room.id,
-            room_score=room_score,  # Calculated room score
-            area_scores=json.dumps(area_scores),  # Store the area scores as JSON
-            zone_name=zone_name  # Save the zone name
+            room_score=room_score,
+            area_scores=json.dumps(area_scores),
+            zone_name=zone_name,
+            zone_score=zone_score,  # Store zone score at time of submission
+            facility_score=facility_score  # Store facility score at time of submission
         )
         
-        # Save to the database
         db.session.add(new_task)
         db.session.commit()
 
         return jsonify({"message": "Task submitted successfully"}), 201
+
 
 
 
