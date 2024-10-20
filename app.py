@@ -9,7 +9,7 @@ from config import Config
 import json  # Needed for handling area_scores JSON field
 from mail_utils import send_mailjet_email  # Import the helper function#
 import requests
-from urllib.parse import unquote
+
 
 # Initialize extensions
 db = SQLAlchemy()
@@ -447,21 +447,21 @@ def create_app():
     
     
     from urllib.parse import unquote
+    
 
     @app.route('/api/zones/<string:zone_name>/score', methods=['GET'])
     def get_zone_score(zone_name):
-        # Decode the URL-encoded zone_name
+    # Decode the URL-encoded zone_name
         zone_name = unquote(zone_name)
-
         print(f"Decoded zone_name: {zone_name}")
         
-        # Fetch all rooms in the zone
-        #rooms = Room.query.filter_by(zone=zone_name).all()
-        rooms = Room.query.filter(Room.zone.ilike(f"%{zone_name}%")).all()
-
+        # Fetch rooms in the zone
+        rooms = Room.query.filter_by(zone=zone_name).all()
 
         if not rooms:
-            return jsonify({"message": "No rooms found in this zone"}), 404
+            print(f"No rooms found for zone: {zone_name}")
+            # Return N/A for the zone score if no rooms are found
+            return jsonify({"zone_name": zone_name, "zone_score": "N/A"}), 200
 
         total_room_score = 0
         room_count = 0
@@ -473,14 +473,16 @@ def create_app():
                 total_room_score += task.room_score
                 room_count += 1
 
-        # If no tasks found for the zone
         if room_count == 0:
-            return jsonify({"message": "No tasks found for this zone"}), 404
+            print(f"No tasks found for zone: {zone_name}")
+            # Return N/A if no tasks have been submitted for the zone
+            return jsonify({"zone_name": zone_name, "zone_score": "N/A"}), 200
 
         # Calculate the average room score for the zone
         zone_score = total_room_score / room_count
-
+        print(f"Zone score for {zone_name}: {zone_score}")
         return jsonify({"zone_name": zone_name, "zone_score": zone_score}), 200
+
 
 
 
