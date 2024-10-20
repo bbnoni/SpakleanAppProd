@@ -277,17 +277,13 @@ def create_app():
 
     @app.route('/api/users/<int:user_id>/offices', methods=['GET'])
     def get_assigned_offices(user_id):
-        sector = request.args.get('sector')  # Get sector from query parameters
         user = User.query.get(user_id)
         
         if not user:
             return jsonify({"message": "User not found"}), 404
 
-        # Filter offices by user and sector if sector is provided
-        if sector:
-            assigned_offices = Office.query.filter_by(user_id=user_id, sector=sector).all()
-        else:
-            assigned_offices = Office.query.filter_by(user_id=user_id).all()
+        # Get all offices assigned to the user
+        assigned_offices = Office.query.filter_by(user_id=user_id).all()
 
         if not assigned_offices:
             return jsonify({"message": "No offices assigned to this user"}), 200
@@ -299,12 +295,10 @@ def create_app():
             offices_data.append({
                 'id': office.id,
                 'name': office.name,
-                'sector': office.sector,  # Include sector in the response
                 'room_count': room_count,  # Add room count to the response
             })
 
         return jsonify({"offices": offices_data}), 200
-
 
 
     # Updated route to create office and room(s) and assign them to a user and zone
