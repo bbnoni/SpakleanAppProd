@@ -220,8 +220,12 @@ def create_app():
             facility_score=facility_score  # Store the fetched facility score
         )
 
-        db.session.add(new_task)
-        db.session.commit()
+        try:
+            db.session.add(new_task)
+            db.session.commit()
+        except Exception as e:
+            print(f"Error saving task: {e}")
+            return jsonify({"message": "Failed to save task"}), 500
 
         return jsonify({"message": "Task submitted successfully"}), 201
 
