@@ -181,7 +181,7 @@ def create_app():
         user_id = data['user_id']
         room_id = data['room_id']
         area_scores = data.get('area_scores', {})
-        zone_name = data.get('zone_name', 'N/A')
+        zone_name = data.get('zone_name')
 
         user = User.query.get(user_id)
         room = Room.query.get(room_id)
@@ -189,38 +189,35 @@ def create_app():
         if not user or not room:
             return jsonify({"message": "User or Room not found"}), 404
 
-        # Calculate room score as the average of area scores
+        # Calculate the room score as the average of area scores
         room_score = sum(area_scores.values()) / len(area_scores) if area_scores else 0
 
-        # Fetch zone score and facility score
-        try:
-            zone_score_response = get_zone_score(zone_name)
-            zone_score = zone_score_response.json().get('zone_score', None)
-        except Exception as e:
-            print(f"Failed to get zone score for {zone_name}: {e}")
-            zone_score = None
+        # Fetch the zone score using the API
+        zone_score_response = requests.get(f"https://spaklean-app-prod.onrender.com/api/zones/{zone_name}/score")
+        if zone_score_response.status_code == 200:
+            zone_score = zone_score_response.json().get('zone_score')
+        else:
+            return jsonify({"message": "Failed to retrieve zone score"}), 500
 
-        try:
-            facility_score_response = get_facility_score()  # Now the function is defined
-            facility_score = facility_score_response.json().get('facility_score', None)
-        except Exception as e:
-            print(f"Failed to get facility score: {e}")
-            facility_score = None
+        # Fetch the facility score using the API
+        facility_score_response = requests.get("https://spaklean-app-prod.onrender.com/api/facility/score")
+        if facility_score_response.status_code == 200:
+            facility_score = facility_score_response.json().get('total_facility_score')
+        else:
+            return jsonify({"message": "Failed to retrieve facility score"}), 500
 
-        print(f"Zone: {zone_name}, Zone Score: {zone_score}, Facility Score: {facility_score}")
-
-        # Save the task submission with area scores, room score, and additional info
+        # Save the task submission with area scores, room score, zone score, and facility score
         new_task = TaskSubmission(
             task_type=task_type,
             latitude=latitude,
             longitude=longitude,
             user_id=user.id,
             room_id=room.id,
-            room_score=room_score,
-            area_scores=json.dumps(area_scores),
+            room_score=room_score,  # Calculated room score
+            area_scores=json.dumps(area_scores),  # Store the area scores as JSON
             zone_name=zone_name,
-            zone_score=zone_score,
-            facility_score=facility_score
+            zone_score=zone_score,  # Store the fetched zone score
+            facility_score=facility_score  # Store the fetched facility score
         )
 
         try:
@@ -231,8 +228,6 @@ def create_app():
             return jsonify({"message": "Failed to save task"}), 500
 
         return jsonify({"message": "Task submitted successfully"}), 201
-
-
 
 
 
