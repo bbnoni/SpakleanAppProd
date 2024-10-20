@@ -9,6 +9,7 @@ from config import Config
 import json  # Needed for handling area_scores JSON field
 from mail_utils import send_mailjet_email  # Import the helper function#
 import requests
+from urllib.parse import unquote
 
 # Initialize extensions
 db = SQLAlchemy()
@@ -455,7 +456,9 @@ def create_app():
         print(f"Decoded zone_name: {zone_name}")
         
         # Fetch all rooms in the zone
-        rooms = Room.query.filter_by(zone=zone_name).all()
+        #rooms = Room.query.filter_by(zone=zone_name).all()
+        rooms = Room.query.filter(Room.zone.ilike(f"%{zone_name}%")).all()
+
 
         if not rooms:
             return jsonify({"message": "No rooms found in this zone"}), 404
