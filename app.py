@@ -451,6 +451,8 @@ def create_app():
     def get_zone_score(zone_name):
         # Decode the URL-encoded zone_name
         zone_name = unquote(zone_name)
+
+        print(f"Decoded zone_name: {zone_name}")
         
         # Fetch all rooms in the zone
         rooms = Room.query.filter_by(zone=zone_name).all()
