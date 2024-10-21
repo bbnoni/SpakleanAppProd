@@ -11,6 +11,7 @@ from mail_utils import send_mailjet_email  # Import the helper function#
 import requests
 
 
+
 # Initialize extensions
 db = SQLAlchemy()
 bcrypt = Bcrypt()
@@ -80,6 +81,29 @@ def create_app():
 
         def __repr__(self):
             return f"<TaskSubmission {self.task_type} by User {self.user_id} in Room {self.room_id}>"
+        
+
+        # Define the Attendance model
+    class Attendance(db.Model):
+        __tablename__ = 'attendance'
+
+        id = db.Column(db.Integer, primary_key=True)  # Primary key
+        user_id = db.Column(db.Integer, nullable=False)  # Reference to the user
+        office_id = db.Column(db.Integer, nullable=False)  # Reference to the office
+        check_in_time = db.Column(db.DateTime, nullable=True, default=None)  # Check-in timestamp
+        check_in_lat = db.Column(db.Float, nullable=True)  # Check-in latitude
+        check_in_long = db.Column(db.Float, nullable=True)  # Check-in longitude
+        check_out_time = db.Column(db.DateTime, nullable=True, default=None)  # Check-out timestamp
+        check_out_lat = db.Column(db.Float, nullable=True)  # Check-out latitude
+        check_out_long = db.Column(db.Float, nullable=True)  # Check-out longitude
+        created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)  # Record creation timestamp
+
+        def __repr__(self):
+            return f'<Attendance {self.id} for User {self.user_id}>'
+        
+
+
+
 
     # ROUTES
 
@@ -563,6 +587,96 @@ def create_app():
         total_facility_score = total_zone_score / zone_count
 
         return jsonify({"total_facility_score": total_facility_score}), 200
+    
+
+    @app.route('/api/attendance', methods=['POST'])
+    def record_attendance():
+        data = request.get_json()
+        user_id = data.get('user_id')
+        office_id = data.get('office_id')
+        check_in_time = data.get('check_in_time')
+        check_in_lat = data.get('check_in_lat')
+        check_in_long = data.get('check_in_long')
+        check_out_time = data.get('check_out_time')
+        check_out_lat = data.get('check_out_lat')
+        check_out_long = data.get('check_out_long')
+
+        # Add validation for required fields
+        if not user_id or not office_id:
+            return jsonify({"message": "Missing required fields"}), 400
+
+        try:
+            # Save attendance to database
+            attendance = Attendance(
+                user_id=user_id,
+                office_id=office_id,
+                check_in_time=check_in_time,
+                check_in_lat=check_in_lat,
+                check_in_long=check_in_long,
+                check_out_time=check_out_time,
+                check_out_lat=check_out_lat,
+                check_out_long=check_out_long,
+            )
+            db.session.add(attendance)
+            db.session.commit()
+            return jsonify({"message": "Attendance recorded successfully"}), 201
+        except Exception as e:
+            return jsonify({"message": f"Error recording attendance: {str(e)}"}), 500
+        
+
+        
+    
+    from models import Attendance, db  # Import Attendance model
+    @app.route('/api/attendance/checkin', methods=['POST'])
+    def check_in():
+        data = request.get_json()
+        try:
+            user_id = data['user_id']
+            office_id = data['office_id']
+            check_in_time = data.get('check_in_time')
+            check_in_lat = data.get('check_in_lat')
+            check_in_long = data.get('check_in_long')
+
+            # Save attendance to the database
+            attendance = Attendance(
+                user_id=user_id,
+                office_id=office_id,
+                check_in_time=check_in_time,
+                check_in_lat=check_in_lat,
+                check_in_long=check_in_long
+            )
+            db.session.add(attendance)
+            db.session.commit()
+            return jsonify({"message": "Check-in recorded successfully"}), 201
+        except Exception as e:
+            return jsonify({"message": f"Error recording check-in: {str(e)}"}), 500
+
+
+    @app.route('/api/attendance/checkout', methods=['POST'])
+    def check_out():
+        data = request.get_json()
+        try:
+            user_id = data['user_id']
+            office_id = data['office_id']
+            check_out_time = data.get('check_out_time')
+            check_out_lat = data.get('check_out_lat')
+            check_out_long = data.get('check_out_long')
+
+            # Find the existing attendance record to update
+            attendance = Attendance.query.filter_by(user_id=user_id, office_id=office_id).order_by(Attendance.id.desc()).first()
+
+            if attendance and attendance.check_out_time is None:
+                attendance.check_out_time = check_out_time
+                attendance.check_out_lat = check_out_lat
+                attendance.check_out_long = check_out_long
+                db.session.commit()
+                return jsonify({"message": "Check-out recorded successfully"}), 201
+            else:
+                return jsonify({"message": "No active check-in found or already checked out"}), 400
+        except Exception as e:
+            return jsonify({"message": f"Error recording check-out: {str(e)}"}), 500
+
+
 
 
 
