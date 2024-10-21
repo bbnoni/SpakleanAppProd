@@ -626,7 +626,7 @@ def create_app():
 
         
     
-    from models import Attendance, db  # Import Attendance model
+    
     @app.route('/api/attendance/checkin', methods=['POST'])
     def check_in():
         data = request.get_json()
