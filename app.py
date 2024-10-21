@@ -176,64 +176,73 @@ def create_app():
     @app.route('/api/tasks/submit', methods=['POST'])
     def submit_task():
         data = request.get_json()
-        task_type = data['task_type']
-        latitude = data.get('latitude')
-        longitude = data.get('longitude')
-        user_id = data['user_id']
-        room_id = data['room_id']
-        area_scores = data.get('area_scores', {})
-        zone_name = data.get('zone_name')
-
-        user = User.query.get(user_id)
-        room = Room.query.get(room_id)
-
-        if not user or not room:
-            return jsonify({"message": "User or Room not found"}), 404
-
-        # Calculate the room score as the average of area scores
-        room_score = sum(area_scores.values()) / len(area_scores) if area_scores else 0
-
-        # Fetch the zone score using the API
-        zone_score_response = requests.get(f"https://spaklean-app-prod.onrender.com/api/zones/{zone_name}/score")
-        if zone_score_response.status_code == 200:
-            zone_score = zone_score_response.json().get('zone_score')
-            
-            # Handle N/A case by assigning None or a default value
-            if zone_score == "N/A":
-                zone_score = None  # Use None to avoid invalid DB entries
-        else:
-            return jsonify({"message": "Failed to retrieve zone score"}), 500
-
-        # Fetch the facility score using the API
-        facility_score_response = requests.get("https://spaklean-app-prod.onrender.com/api/facility/score")
-        if facility_score_response.status_code == 200:
-            facility_score = facility_score_response.json().get('total_facility_score')
-        else:
-            return jsonify({"message": "Failed to retrieve facility score"}), 500
-
-        # Save the task submission with area scores, room score, zone score, and facility score
-        new_task = TaskSubmission(
-            task_type=task_type,
-            latitude=latitude,
-            longitude=longitude,
-            user_id=user.id,
-            room_id=room.id,
-            room_score=room_score,  # Calculated room score
-            area_scores=json.dumps(area_scores),  # Store the area scores as JSON
-            zone_name=zone_name,
-            zone_score=zone_score,  # Use None if zone_score is N/A
-            facility_score=facility_score  # Store the fetched facility score
-        )
 
         try:
+            # Extract data from request
+            task_type = data['task_type']
+            latitude = data.get('latitude')
+            longitude = data.get('longitude')
+            user_id = data['user_id']
+            room_id = data['room_id']
+            area_scores = data.get('area_scores', {})
+            zone_name = data.get('zone_name')
+
+            # Check if required fields are present
+            if not all([task_type, user_id, room_id, zone_name]):
+                return jsonify({"message": "Missing required fields"}), 400
+
+            # Fetch user and room information from the database
+            user = User.query.get(user_id)
+            room = Room.query.get(room_id)
+
+            if not user or not room:
+                return jsonify({"message": "User or Room not found"}), 404
+
+            # Calculate room score from area scores
+            room_score = sum(area_scores.values()) / len(area_scores) if area_scores else 0
+
+            # Fetch the zone score using the API
+            zone_score_response = requests.get(f"https://spaklean-app-prod.onrender.com/api/zones/{zone_name}/score")
+            if zone_score_response.status_code == 200:
+                zone_score = zone_score_response.json().get('zone_score')
+                
+                # Handle N/A case by assigning None
+                if zone_score == "N/A":
+                    zone_score = None
+            else:
+                return jsonify({"message": "Failed to retrieve zone score"}), 500
+
+            # Fetch the facility score using the API
+            facility_score_response = requests.get("https://spaklean-app-prod.onrender.com/api/facility/score")
+            if facility_score_response.status_code == 200:
+                facility_score = facility_score_response.json().get('total_facility_score')
+            else:
+                return jsonify({"message": "Failed to retrieve facility score"}), 500
+
+            # Save the task submission to the database
+            new_task = TaskSubmission(
+                task_type=task_type,
+                latitude=latitude,
+                longitude=longitude,
+                user_id=user.id,
+                room_id=room.id,
+                room_score=room_score,
+                area_scores=json.dumps(area_scores),  # Store the area scores as JSON
+                zone_name=zone_name,
+                zone_score=zone_score,  # Handle N/A properly
+                facility_score=facility_score  # Store facility score
+            )
+
+            # Commit the new task to the database
             db.session.add(new_task)
             db.session.commit()
+
+            return jsonify({"message": "Task submitted successfully"}), 201
+
         except Exception as e:
-            print(f"Error saving task: {e}")
-            return jsonify({"message": "Failed to save task"}), 500
-
-        return jsonify({"message": "Task submitted successfully"}), 201
-
+            # Log any exceptions for debugging
+            print(f"Error submitting task: {e}")
+            return jsonify({"message": "Failed to submit task"}), 500
 
 
 
