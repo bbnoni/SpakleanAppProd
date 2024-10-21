@@ -197,9 +197,10 @@ def create_app():
         zone_score_response = requests.get(f"https://spaklean-app-prod.onrender.com/api/zones/{zone_name}/score")
         if zone_score_response.status_code == 200:
             zone_score = zone_score_response.json().get('zone_score')
-            # Handle the "N/A" case: if zone_score is "N/A", set it to None or a default value (like 0.0)
+            
+            # Handle N/A case by assigning None or a default value
             if zone_score == "N/A":
-                zone_score = None  # Or set to 0.0 if you prefer
+                zone_score = None  # Use None to avoid invalid DB entries
         else:
             return jsonify({"message": "Failed to retrieve zone score"}), 500
 
@@ -220,7 +221,7 @@ def create_app():
             room_score=room_score,  # Calculated room score
             area_scores=json.dumps(area_scores),  # Store the area scores as JSON
             zone_name=zone_name,
-            zone_score=zone_score,  # Store the fetched zone score (can be None)
+            zone_score=zone_score,  # Use None if zone_score is N/A
             facility_score=facility_score  # Store the fetched facility score
         )
 
@@ -232,6 +233,7 @@ def create_app():
             return jsonify({"message": "Failed to save task"}), 500
 
         return jsonify({"message": "Task submitted successfully"}), 201
+
 
 
 
