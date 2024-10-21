@@ -178,12 +178,12 @@ def create_app():
     @app.route('/api/tasks/submit', methods=['POST'])
     def submit_task():
         data = request.get_json()
-        print("Received task submission:", data)
+        print("Received task submission:", data)  # Log the incoming data
 
         try:
             # Decode zone_name if it's URL-encoded
             zone_name = unquote(data.get('zone_name'))
-            print(f"Decoded zone_name: {zone_name}")
+            print(f"Decoded zone_name: {zone_name}")  # Log decoded zone_name
 
             task_type = data['task_type']
             latitude = data.get('latitude')
@@ -196,6 +196,7 @@ def create_app():
 
             # Check if required fields are present
             if not all([task_type, user_id, room_id, zone_name]):
+                print("Missing required fields.")  # Log missing fields
                 return jsonify({"message": "Missing required fields"}), 400
 
             # Fetch user and room information from the database
@@ -203,6 +204,7 @@ def create_app():
             room = Room.query.get(room_id)
 
             if not user or not room:
+                print(f"User or Room not found: user_id={user_id}, room_id={room_id}")  # Log missing user/room
                 return jsonify({"message": "User or Room not found"}), 404
 
             # Calculate room score from area scores
@@ -210,16 +212,26 @@ def create_app():
                 room_score = sum(area_scores.values()) / len(area_scores)
             else:
                 room_score = 0.0  # Default value if no area scores
+            print(f"Calculated room_score: {room_score}")  # Log room score
 
             # Make sure zone_score and facility_score are valid double precision values
-            zone_score = float(zone_score) if zone_score is not None else None
-            facility_score = float(facility_score) if facility_score is not None else None
+            if zone_score is not None:
+                zone_score = float(zone_score)
+                print(f"Valid zone_score: {zone_score}")  # Log valid zone score
+            else:
+                print("Zone score is None")  # Log if zone_score is None
+
+            if facility_score is not None:
+                facility_score = float(facility_score)
+                print(f"Valid facility_score: {facility_score}")  # Log valid facility score
+            else:
+                print("Facility score is None")  # Log if facility_score is None
 
             # Ensure area_scores is valid JSON
             try:
                 area_scores_json = json.dumps(area_scores)
             except Exception as e:
-                print(f"Error converting area_scores to JSON: {e}")
+                print(f"Error converting area_scores to JSON: {e}")  # Log JSON conversion error
                 return jsonify({"message": "Invalid area_scores format"}), 400
 
             # Save the task submission to the database
@@ -239,6 +251,7 @@ def create_app():
             # Commit the new task to the database
             db.session.add(new_task)
             db.session.commit()
+            print("Task submitted successfully.")  # Log successful task submission
 
             return jsonify({"message": "Task submitted successfully"}), 201
 
@@ -246,7 +259,6 @@ def create_app():
             # Log any exceptions for debugging
             print(f"Error submitting task: {e}")
             return jsonify({"message": "Failed to submit task", "error": str(e)}), 500
-
 
 
 
