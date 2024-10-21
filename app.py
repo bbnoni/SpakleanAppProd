@@ -630,13 +630,23 @@ def create_app():
     @app.route('/api/attendance/checkin', methods=['POST'])
     def check_in():
         data = request.get_json()
-        try:
-            user_id = data['user_id']
-            office_id = data['office_id']
-            check_in_time = data.get('check_in_time')
-            check_in_lat = data.get('check_in_lat')
-            check_in_long = data.get('check_in_long')
+        user_id = data['user_id']
+        office_id = data['office_id']
+        
+        # Check if the user has an active session (checked in but not checked out)
+        active_attendance = Attendance.query.filter_by(user_id=user_id, office_id=office_id) \
+            .filter(Attendance.check_out_time.is_(None)) \
+            .first()
 
+        if active_attendance:
+            return jsonify({"message": "User already checked in. Please check out first."}), 400
+
+        # Proceed with check-in
+        check_in_time = data.get('check_in_time')
+        check_in_lat = data.get('check_in_lat')
+        check_in_long = data.get('check_in_long')
+
+        try:
             # Save attendance to the database
             attendance = Attendance(
                 user_id=user_id,
@@ -650,6 +660,7 @@ def create_app():
             return jsonify({"message": "Check-in recorded successfully"}), 201
         except Exception as e:
             return jsonify({"message": f"Error recording check-in: {str(e)}"}), 500
+
 
 
     @app.route('/api/attendance/checkout', methods=['POST'])
@@ -683,9 +694,8 @@ def create_app():
         user_id = request.args.get('user_id')
         office_id = request.args.get('office_id')
 
-        # Fetch the latest attendance record for the user and office where check_out_time is null
+        # Fetch the most recent attendance record for the user and office
         attendance = Attendance.query.filter_by(user_id=user_id, office_id=office_id) \
-            .filter(Attendance.check_out_time.is_(None)) \
             .order_by(Attendance.id.desc()) \
             .first()
 
@@ -699,7 +709,8 @@ def create_app():
                 "check_out_long": attendance.check_out_long,
             }), 200
         else:
-            return jsonify({"message": "No active attendance found"}), 404
+            return jsonify({"message": "No attendance record found"}), 404
+
 
 
 
