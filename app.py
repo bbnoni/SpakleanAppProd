@@ -174,22 +174,25 @@ def create_app():
 
     from urllib.parse import unquote
 
+
     @app.route('/api/tasks/submit', methods=['POST'])
     def submit_task():
         data = request.get_json()
         print("Received task submission:", data)
 
         try:
-            # Extract and decode the zone_name if it is URL-encoded
+            # Decode zone_name if it's URL-encoded
             zone_name = unquote(data.get('zone_name'))
             print(f"Decoded zone_name: {zone_name}")
 
             task_type = data['task_type']
             latitude = data.get('latitude')
             longitude = data.get('longitude')
-            user_id = data['user_id']
-            room_id = data['room_id']
+            user_id = int(data['user_id'])  # Ensure user_id is an integer
+            room_id = int(data['room_id'])  # Ensure room_id is an integer
             area_scores = data.get('area_scores', {})
+            zone_score = data.get('zone_score')  # Expecting a double precision value
+            facility_score = data.get('facility_score')  # Expecting a double precision value
 
             # Check if required fields are present
             if not all([task_type, user_id, room_id, zone_name]):
@@ -203,25 +206,21 @@ def create_app():
                 return jsonify({"message": "User or Room not found"}), 404
 
             # Calculate room score from area scores
-            room_score = sum(area_scores.values()) / len(area_scores) if area_scores else 0
-
-            # Fetch the zone score using the API
-            zone_score_response = requests.get(f"https://spaklean-app-prod.onrender.com/api/zones/{zone_name}/score")
-            if zone_score_response.status_code == 200:
-                zone_score = zone_score_response.json().get('zone_score')
-                
-                # Handle N/A case by assigning None
-                if zone_score == "N/A":
-                    zone_score = None
+            if area_scores:
+                room_score = sum(area_scores.values()) / len(area_scores)
             else:
-                return jsonify({"message": "Failed to retrieve zone score"}), 500
+                room_score = 0.0  # Default value if no area scores
 
-            # Fetch the facility score using the API
-            facility_score_response = requests.get("https://spaklean-app-prod.onrender.com/api/facility/score")
-            if facility_score_response.status_code == 200:
-                facility_score = facility_score_response.json().get('total_facility_score')
-            else:
-                return jsonify({"message": "Failed to retrieve facility score"}), 500
+            # Make sure zone_score and facility_score are valid double precision values
+            zone_score = float(zone_score) if zone_score is not None else None
+            facility_score = float(facility_score) if facility_score is not None else None
+
+            # Ensure area_scores is valid JSON
+            try:
+                area_scores_json = json.dumps(area_scores)
+            except Exception as e:
+                print(f"Error converting area_scores to JSON: {e}")
+                return jsonify({"message": "Invalid area_scores format"}), 400
 
             # Save the task submission to the database
             new_task = TaskSubmission(
@@ -231,10 +230,10 @@ def create_app():
                 user_id=user.id,
                 room_id=room.id,
                 room_score=room_score,
-                area_scores=json.dumps(area_scores),  # Store the area scores as JSON
+                area_scores=area_scores_json,  # Store the area scores as JSON
                 zone_name=zone_name,
-                zone_score=zone_score,  # Handle N/A properly
-                facility_score=facility_score  # Store facility score
+                zone_score=zone_score,  # Should be a double or None
+                facility_score=facility_score  # Should be a double or None
             )
 
             # Commit the new task to the database
@@ -246,7 +245,8 @@ def create_app():
         except Exception as e:
             # Log any exceptions for debugging
             print(f"Error submitting task: {e}")
-            return jsonify({"message": "Failed to submit task"}), 500
+            return jsonify({"message": "Failed to submit task", "error": str(e)}), 500
+
 
 
 
