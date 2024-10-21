@@ -452,22 +452,27 @@ def create_app():
 
     @app.route('/api/zones/<string:zone_name>/score', methods=['GET'])
     def get_zone_score(zone_name):
-    # Decode the URL-encoded zone_name
+        # Decode the URL-encoded zone_name
         zone_name = unquote(zone_name)
-        print(f"Decoded zone_name: {zone_name}")
-        
-        # Fetch rooms in the zone
-        rooms = Room.query.filter_by(zone=zone_name).all()
+        office_id = request.args.get('office_id')  # Get the office_id from query params
+        print(f"Decoded zone_name: {zone_name}, Office ID: {office_id}")
+
+        # Validate office_id
+        if not office_id:
+            return jsonify({"message": "Office ID is required"}), 400
+
+        # Fetch rooms in the zone that belong to the specific office
+        rooms = Room.query.filter_by(zone=zone_name, office_id=office_id).all()
 
         if not rooms:
-            print(f"No rooms found for zone: {zone_name}")
-            # Return N/A for the zone score if no rooms are found
+            print(f"No rooms found for zone: {zone_name} in office {office_id}")
+            # Return N/A for the zone score if no rooms are found in the office
             return jsonify({"zone_name": zone_name, "zone_score": "N/A"}), 200
 
         total_room_score = 0
         room_count = 0
 
-        # Loop through each room and fetch the latest task submission
+        # Loop through each room and fetch the latest task submission for the specific office
         for room in rooms:
             task = TaskSubmission.query.filter_by(room_id=room.id).order_by(TaskSubmission.date_submitted.desc()).first()
             if task:
@@ -475,14 +480,15 @@ def create_app():
                 room_count += 1
 
         if room_count == 0:
-            print(f"No tasks found for zone: {zone_name}")
-            # Return N/A if no tasks have been submitted for the zone
+            print(f"No tasks found for zone: {zone_name} in office {office_id}")
+            # Return N/A if no tasks have been submitted for the zone in the office
             return jsonify({"zone_name": zone_name, "zone_score": "N/A"}), 200
 
-        # Calculate the average room score for the zone
+        # Calculate the average room score for the zone in the office
         zone_score = total_room_score / room_count
-        print(f"Zone score for {zone_name}: {zone_score}")
+        print(f"Zone score for {zone_name} in office {office_id}: {zone_score}")
         return jsonify({"zone_name": zone_name, "zone_score": zone_score}), 200
+
 
 
 
