@@ -172,20 +172,24 @@ def create_app():
 
         return jsonify({"message": "Room created successfully"}), 201
 
-    # Add room_score, area_scores (JSON), and zone_name handling in this route
+    from urllib.parse import unquote
+
     @app.route('/api/tasks/submit', methods=['POST'])
     def submit_task():
         data = request.get_json()
+        print("Received task submission:", data)
 
         try:
-            # Extract data from request
+            # Extract and decode the zone_name if it is URL-encoded
+            zone_name = unquote(data.get('zone_name'))
+            print(f"Decoded zone_name: {zone_name}")
+
             task_type = data['task_type']
             latitude = data.get('latitude')
             longitude = data.get('longitude')
             user_id = data['user_id']
             room_id = data['room_id']
             area_scores = data.get('area_scores', {})
-            zone_name = data.get('zone_name')
 
             # Check if required fields are present
             if not all([task_type, user_id, room_id, zone_name]):
@@ -243,6 +247,7 @@ def create_app():
             # Log any exceptions for debugging
             print(f"Error submitting task: {e}")
             return jsonify({"message": "Failed to submit task"}), 500
+
 
 
 
@@ -459,8 +464,6 @@ def create_app():
     
     
     from urllib.parse import unquote
-
-    from flask import request
 
     @app.route('/api/zones/<string:zone_name>/score', methods=['GET'])
     def get_zone_score(zone_name):
