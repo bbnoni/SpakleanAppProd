@@ -675,6 +675,32 @@ def create_app():
                 return jsonify({"message": "No active check-in found or already checked out"}), 400
         except Exception as e:
             return jsonify({"message": f"Error recording check-out: {str(e)}"}), 500
+        
+
+
+    @app.route('/api/attendance/status', methods=['GET'])
+    def get_attendance_status():
+        user_id = request.args.get('user_id')
+        office_id = request.args.get('office_id')
+
+        # Fetch the latest attendance record for the user and office where check_out_time is null
+        attendance = Attendance.query.filter_by(user_id=user_id, office_id=office_id) \
+            .filter(Attendance.check_out_time.is_(None)) \
+            .order_by(Attendance.id.desc()) \
+            .first()
+
+        if attendance:
+            return jsonify({
+                "check_in_time": attendance.check_in_time,
+                "check_in_lat": attendance.check_in_lat,
+                "check_in_long": attendance.check_in_long,
+                "check_out_time": attendance.check_out_time,
+                "check_out_lat": attendance.check_out_lat,
+                "check_out_long": attendance.check_out_long,
+            }), 200
+        else:
+            return jsonify({"message": "No active attendance found"}), 404
+
 
 
 
