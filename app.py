@@ -115,24 +115,61 @@ def create_app():
     def health_check():
         return jsonify({"status": "healthy"}), 200
 
+    # @app.route('/api/auth/register', methods=['POST'])
+    # def register():
+    #     data = request.get_json()
+    #     username = data['username']
+    #     password = data['password']
+    #     role = data['role']
+
+    #     password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
+    #     new_user = User(username=username, password_hash=password_hash, role=role)
+    #     db.session.add(new_user)
+    #     db.session.commit()
+        
+    #     # Send a welcome email via Mailjet
+    #     subject = "Welcome to Spaklean"
+    #     content = f"Hello {username},\n\nYour account has been created successfully. You can now log in using your credentials."
+    #     send_mailjet_email(username, subject, content)
+
+    #     return jsonify({"message": "User registered successfully"}), 201
+
+
     @app.route('/api/auth/register', methods=['POST'])
     def register():
         data = request.get_json()
         username = data['username']
-        password = data['password']
+        password = data['password']  # Plain text password provided/generated
         role = data['role']
 
+        # Hash the password
         password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
+        
+        # Create new user with hashed password
         new_user = User(username=username, password_hash=password_hash, role=role)
         db.session.add(new_user)
         db.session.commit()
-        
-        # Send a welcome email via Mailjet
+
+        # Send a welcome email via Mailjet with the plain password
         subject = "Welcome to Spaklean"
-        content = f"Hello {username},\n\nYour account has been created successfully. You can now log in using your credentials."
+        content = f"""Hello {username},
+
+        Your account has been created successfully. Here are your login credentials:
+
+        Username: {username}
+        Password: {password}
+
+        You will be required to change your password upon logging in for the first time.
+
+        Best regards,
+        The Spaklean Team
+        """
+        
+        # Assuming send_mailjet_email takes (recipient_email, subject, content)
         send_mailjet_email(username, subject, content)
 
         return jsonify({"message": "User registered successfully"}), 201
+
     
     @app.route('/api/admin/users', methods=['GET'])
     def get_users():
