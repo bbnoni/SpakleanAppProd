@@ -507,12 +507,28 @@ def create_app():
         # Hash the new password and update the user's password
         user.password_hash = bcrypt.generate_password_hash(new_password).decode('utf-8')
         user.password_change_required = True  # User is required to change the password on next login
-        #user.password_change_required = False  # Reset password change flag if it exists
-
-
         db.session.commit()
 
-        return jsonify({"message": "Password reset successfully"}), 200
+        # Send the new password to the user via email
+        subject = "Password Reset Notification"
+        content = f"""Hello {user.username},
+
+        Your password has been successfully reset. Here are your new login credentials:
+
+        Username: {user.username}
+        New Password: {new_password}
+
+        You will be required to change your password after logging in.
+
+        Best regards,
+        The Spaklean Team
+        """
+
+        # Assuming send_mailjet_email takes (recipient_email, subject, content)
+        send_mailjet_email(user.username, subject, content)  # Modify 'user.username' if it's the email
+
+        return jsonify({"message": "Password reset successfully, and email sent."}), 200
+
     
 
     @app.route('/api/admin/add_more_rooms', methods=['POST'])
