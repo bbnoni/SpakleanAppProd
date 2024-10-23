@@ -389,10 +389,12 @@ def create_app():
             offices_data.append({
                 'id': office.id,
                 'name': office.name,
+                'sector': office.sector,  # Include sector in the response
                 'room_count': room_count,  # Add room count to the response
             })
 
         return jsonify({"offices": offices_data}), 200
+
 
 
     # Updated route to create office and room(s) and assign them to a user and zone
