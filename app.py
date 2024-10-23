@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify,url_for
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from flask_bcrypt import Bcrypt
@@ -742,6 +742,81 @@ def create_app():
             }), 200
         else:
             return jsonify({"message": "No attendance record found"}), 404
+        
+
+
+    from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
+    from datetime import datetime
+    
+
+    # Serializer for generating and validating tokens
+    serializer = URLSafeTimedSerializer('your_secret_key')  # Replace with a secure key
+
+    @app.route('/api/auth/forgot_password', methods=['POST'])
+    def forgot_password():
+        data = request.get_json()
+        email = data.get('email')
+
+        if not email:
+            return jsonify({"message": "Email is required"}), 400
+
+        # Check if the user exists
+        user = User.query.filter_by(username=email).first()  # Assuming username is the email
+        if not user:
+            return jsonify({"message": "No user found with this email"}), 404
+
+        # Generate a token valid for 1 hour
+        token = serializer.dumps(email, salt='password-reset-salt')
+
+        # Generate the password reset URL (url_for generates a URL for the reset_password route)
+        reset_url = url_for('reset_password', token=token, _external=True)
+
+        # Send the reset password email
+        subject = "Password Reset Request"
+        content = f"""Hello {user.username},
+
+    You requested to reset your password. Click the link below to reset it:
+    {reset_url}
+
+    If you did not request this, please ignore this email.
+
+    Best regards,
+    Spaklean Team
+    """
+        send_mailjet_email(user.username, subject, content)
+
+        return jsonify({"message": "Password reset email sent"}), 200
+    
+
+    @app.route('/api/auth/reset_password/<token>', methods=['POST'])
+    def reset_password(token):
+        try:
+            # Validate the token (expires after 1 hour)
+            email = serializer.loads(token, salt='password-reset-salt', max_age=3600)
+        except SignatureExpired:
+            return jsonify({"message": "The reset link has expired."}), 400
+        except BadSignature:
+            return jsonify({"message": "Invalid or expired reset token."}), 400
+
+        # Get the new password from the request
+        data = request.get_json()
+        new_password = data.get('new_password')
+
+        if not new_password:
+            return jsonify({"message": "New password is required"}), 400
+
+        # Find the user by email
+        user = User.query.filter_by(username=email).first()
+        if not user:
+            return jsonify({"message": "User not found"}), 404
+
+        # Hash the new password and update the user
+        hashed_password = bcrypt.generate_password_hash(new_password).decode('utf-8')
+        user.password_hash = hashed_password
+        db.session.commit()
+
+        return jsonify({"message": "Password has been reset successfully."}), 200
+
 
 
 
