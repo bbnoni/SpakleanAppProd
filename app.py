@@ -540,7 +540,7 @@ def create_app():
 
         # Send the new password to the user via email
         subject = "Password Reset Notification"
-        content = f"""Hello {user.username},
+        content = f"""Hello {user.first_name},
 
         Your password has been successfully reset. Here are your new login credentials:
 
