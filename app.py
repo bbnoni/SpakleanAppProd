@@ -37,6 +37,9 @@ def create_app():
     # MODELS
     class User(db.Model):
         id = db.Column(db.Integer, primary_key=True)
+        first_name = db.Column(db.String(64), nullable=False)  # First name
+        middle_name = db.Column(db.String(64), nullable=True)   # Middle name (optional)
+        last_name = db.Column(db.String(64), nullable=False)    # Last name
         username = db.Column(db.String(64), unique=True, nullable=False)
         password_hash = db.Column(db.String(128), nullable=False)
         role = db.Column(db.String(20), nullable=False)
@@ -45,7 +48,7 @@ def create_app():
         task_submissions = db.relationship('TaskSubmission', backref='user', lazy=True)
 
         def __repr__(self):
-            return f"<User {self.username}>"
+            return f"<User {self.username} - {self.first_name} {self.last_name}>"
 
     class Office(db.Model):
         id = db.Column(db.Integer, primary_key=True)
@@ -141,21 +144,37 @@ def create_app():
     @app.route('/api/auth/register', methods=['POST'])
     def register():
         data = request.get_json()
-        username = data['username']
-        password = data['password']  # Plain text password provided/generated
-        role = data['role']
+        
+        # Extract name fields, middle_name is optional
+        first_name = data.get('first_name')
+        middle_name = data.get('middle_name', '')  # Default to empty string if not provided
+        last_name = data.get('last_name')
+        username = data.get('username')
+        password = data.get('password')  # Plain text password provided/generated
+        role = data.get('role')
+
+        # Validate required fields
+        if not all([first_name, last_name, username, password, role]):
+            return jsonify({"message": "First name, last name, username, password, and role are required."}), 400
 
         # Hash the password
         password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
         
-        # Create new user with hashed password
-        new_user = User(username=username, password_hash=password_hash, role=role)
+        # Create new user with hashed password and optional middle name
+        new_user = User(
+            first_name=first_name,
+            middle_name=middle_name,  # Optional field
+            last_name=last_name,
+            username=username,
+            password_hash=password_hash,
+            role=role
+        )
         db.session.add(new_user)
         db.session.commit()
 
         # Send a welcome email via Mailjet with the plain password
         subject = "Welcome to Spaklean"
-        content = f"""Hello {username},
+        content = f"""Hello {first_name} {last_name},
 
         Your account has been created successfully. Here are your login credentials:
 
@@ -172,6 +191,8 @@ def create_app():
         send_mailjet_email(username, subject, content)
 
         return jsonify({"message": "User registered successfully"}), 201
+
+
 
     
     @app.route('/api/admin/users', methods=['GET'])
