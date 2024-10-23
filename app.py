@@ -875,6 +875,37 @@ def create_app():
         return jsonify({"message": "Temporary password sent to your email"}), 200
 
 
+    @app.route('/api/admin/add_more_rooms', methods=['POST'])
+    def add_more_rooms():
+        data = request.get_json()
+        user_id = data.get('user_id')
+        office_id = data.get('office_id')
+        room_names = data.get('room_names')  # Expecting a list of room names
+        zone = data.get('zone')  # Expecting a zone
+
+        if not all([user_id, office_id, room_names, zone]):
+            return jsonify({"message": "User ID, Office ID, Room Names, and Zone are required."}), 400
+
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({"message": "User not found."}), 404
+
+        office = Office.query.get(office_id)
+        if not office:
+            return jsonify({"message": "Office not found."}), 404
+
+        # Add rooms to the existing office
+        room_ids = []
+        for room_name in room_names:
+            new_room = Room(name=room_name, zone=zone, office_id=office_id)
+            db.session.add(new_room)
+            db.session.commit()
+            room_ids.append(new_room.id)
+
+        return jsonify({"message": "Rooms added successfully", "room_ids": room_ids}), 201
+
+
+
 
 
 
