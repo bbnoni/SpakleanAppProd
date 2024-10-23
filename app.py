@@ -51,10 +51,11 @@ def create_app():
         id = db.Column(db.Integer, primary_key=True)
         name = db.Column(db.String(120), unique=True, nullable=False)
         rooms = db.relationship('Room', backref='office', lazy=True)
+        sector = db.Column(db.String(100), nullable=False)  # Added sector field
         user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
 
         def __repr__(self):
-            return f"<Office {self.name}>"
+            return f"<Office {self.name} in sector {self.sector}>"
 
     class Room(db.Model):
         id = db.Column(db.Integer, primary_key=True)
@@ -395,6 +396,7 @@ def create_app():
 
 
     # Updated route to create office and room(s) and assign them to a user and zone
+    # Updated route to create office and room(s) and assign them to a user, zone, and sector
     @app.route('/api/admin/create_office_and_room', methods=['POST'])
     def create_office_and_room():
         data = request.get_json()
@@ -402,13 +404,14 @@ def create_app():
         room_names = data['room_names']  # Expecting a list of room names
         zone = data['zone']
         user_id = data['user_id']
-        
+        sector = data['sector']  # Get sector from the request
+
         user = User.query.get(user_id)
         if not user:
             return jsonify({"message": "User not found"}), 404
 
-        # Create the office
-        new_office = Office(name=office_name, user_id=user.id)
+        # Create the office with sector
+        new_office = Office(name=office_name, user_id=user.id, sector=sector)
         db.session.add(new_office)
         db.session.commit()
 
@@ -429,6 +432,7 @@ def create_app():
             "office_id": new_office.id,
             "room_ids": room_ids
         }), 201
+
 
     @app.route('/api/users/<int:user_id>/offices/<int:office_id>/rooms/<string:zone>', methods=['GET'])
     def get_rooms_by_office_and_zone(user_id, office_id, zone):
