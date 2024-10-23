@@ -789,7 +789,7 @@ def create_app():
     
 
     @app.route('/api/auth/reset_password/<token>', methods=['POST'])
-    def reset_password(token):
+    def reset_password_with_token(token):
         try:
             # Validate the token (expires after 1 hour)
             email = serializer.loads(token, salt='password-reset-salt', max_age=3600)
