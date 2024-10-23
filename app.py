@@ -882,7 +882,7 @@ def create_app():
 
         # Send the temporary password to the user's email
         subject = "Temporary Password for Spaklean"
-        content = f"""Hello {user.username},
+        content = f"""Hello {user.first_name},
 
         A request was made to reset your password. Here is your temporary login password:
 
