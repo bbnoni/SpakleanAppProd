@@ -788,7 +788,7 @@ def create_app():
         return jsonify({"message": "Password reset email sent"}), 200
     
 
-    @app.route('/api/auth/reset_password/<token>', methods=['POST'])
+    @app.route('/api/auth/reset_password_with_token/<token>', methods=['POST'])
     def reset_password_with_token(token):
         try:
             # Validate the token (expires after 1 hour)
