@@ -690,6 +690,8 @@ def create_app():
     
    
 
+   
+
     # Route to check attendance status for a user and office
     @app.route('/api/attendance/status', methods=['GET'])
     def get_attendance_status():
@@ -703,7 +705,7 @@ def create_app():
 
         # Fetch today's attendance record for the user and office
         attendance = Attendance.query.filter_by(user_id=user_id, office_id=office_id) \
-            .filter(Attendance.check_in_time >= today) \
+            .filter(db.func.date(Attendance.check_in_time) == today) \
             .order_by(Attendance.check_in_time.desc()) \
             .first()
 
@@ -746,7 +748,7 @@ def create_app():
 
         # Ensure the user has not already checked in today
         active_attendance = Attendance.query.filter_by(user_id=user_id, office_id=office_id) \
-            .filter(Attendance.check_in_time >= today) \
+            .filter(db.func.date(Attendance.check_in_time) == today) \
             .filter(Attendance.check_out_time.is_(None)) \
             .first()
 
@@ -783,7 +785,7 @@ def create_app():
 
             # Find today's attendance record for the user and office
             attendance = Attendance.query.filter_by(user_id=user_id, office_id=office_id) \
-                .filter(Attendance.check_in_time >= today) \
+                .filter(db.func.date(Attendance.check_in_time) == today) \
                 .filter(Attendance.check_out_time.is_(None)) \
                 .first()
 
@@ -797,10 +799,6 @@ def create_app():
                 return jsonify({"message": "No active check-in found for today or already checked out"}), 400
         except Exception as e:
             return jsonify({"message": f"Error recording check-out: {str(e)}"}), 500
-        
-
-
-        from datetime import datetime, date
 
     # Route to get attendance history for a user and office
     @app.route('/api/attendance/history', methods=['GET'])
@@ -832,6 +830,7 @@ def create_app():
 
         except Exception as e:
             return jsonify({"message": f"Error fetching attendance history: {str(e)}"}), 500
+
 
 
         
