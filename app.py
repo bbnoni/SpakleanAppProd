@@ -4,7 +4,7 @@ from flask_cors import CORS
 from flask_bcrypt import Bcrypt
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 from flask_migrate import Migrate
-from datetime import datetime
+from datetime import datetime, date
 from config import Config
 import json  # Needed for handling area_scores JSON field
 from mail_utils import send_mailjet_email  # Import the helper function#
@@ -650,44 +650,46 @@ def create_app():
         return jsonify({"total_facility_score": total_facility_score}), 200
     
 
-    @app.route('/api/attendance', methods=['POST'])
-    def record_attendance():
-        data = request.get_json()
-        user_id = data.get('user_id')
-        office_id = data.get('office_id')
-        check_in_time = data.get('check_in_time')
-        check_in_lat = data.get('check_in_lat')
-        check_in_long = data.get('check_in_long')
-        check_out_time = data.get('check_out_time')
-        check_out_lat = data.get('check_out_lat')
-        check_out_long = data.get('check_out_long')
+    # @app.route('/api/attendance', methods=['POST'])
+    # def record_attendance():
+    #     data = request.get_json()
+    #     user_id = data.get('user_id')
+    #     office_id = data.get('office_id')
+    #     check_in_time = data.get('check_in_time')
+    #     check_in_lat = data.get('check_in_lat')
+    #     check_in_long = data.get('check_in_long')
+    #     check_out_time = data.get('check_out_time')
+    #     check_out_lat = data.get('check_out_lat')
+    #     check_out_long = data.get('check_out_long')
 
-        # Add validation for required fields
-        if not user_id or not office_id:
-            return jsonify({"message": "Missing required fields"}), 400
+    #     # Add validation for required fields
+    #     if not user_id or not office_id:
+    #         return jsonify({"message": "Missing required fields"}), 400
 
-        try:
-            # Save attendance to database
-            attendance = Attendance(
-                user_id=user_id,
-                office_id=office_id,
-                check_in_time=check_in_time,
-                check_in_lat=check_in_lat,
-                check_in_long=check_in_long,
-                check_out_time=check_out_time,
-                check_out_lat=check_out_lat,
-                check_out_long=check_out_long,
-            )
-            db.session.add(attendance)
-            db.session.commit()
-            return jsonify({"message": "Attendance recorded successfully"}), 201
-        except Exception as e:
-            return jsonify({"message": f"Error recording attendance: {str(e)}"}), 500
+    #     try:
+    #         # Save attendance to database
+    #         attendance = Attendance(
+    #             user_id=user_id,
+    #             office_id=office_id,
+    #             check_in_time=check_in_time,
+    #             check_in_lat=check_in_lat,
+    #             check_in_long=check_in_long,
+    #             check_out_time=check_out_time,
+    #             check_out_lat=check_out_lat,
+    #             check_out_long=check_out_long,
+    #         )
+    #         db.session.add(attendance)
+    #         db.session.commit()
+    #         return jsonify({"message": "Attendance recorded successfully"}), 201
+    #     except Exception as e:
+    #         return jsonify({"message": f"Error recording attendance: {str(e)}"}), 500
         
 
         
     
     
+   
+
     # Route to check attendance status for a user and office
     @app.route('/api/attendance/status', methods=['GET'])
     def get_attendance_status():
@@ -697,9 +699,12 @@ def create_app():
         if not user_id or not office_id:
             return jsonify({"message": "User ID and Office ID are required"}), 400
 
-        # Fetch the most recent attendance record for the user and office
+        today = date.today()
+
+        # Fetch today's attendance record for the user and office
         attendance = Attendance.query.filter_by(user_id=user_id, office_id=office_id) \
-            .order_by(Attendance.created_at.desc()) \
+            .filter(Attendance.check_in_time >= today) \
+            .order_by(Attendance.check_in_time.desc()) \
             .first()
 
         if attendance:
@@ -724,7 +729,7 @@ def create_app():
                 "attendance_history": history_data
             }), 200
 
-        return jsonify({"message": "No attendance record found"}), 404
+        return jsonify({"message": "No attendance record found for today"}), 404
 
     # Route to check-in
     @app.route('/api/attendance/checkin', methods=['POST'])
@@ -737,13 +742,16 @@ def create_app():
         check_in_lat = data.get('check_in_lat')
         check_in_long = data.get('check_in_long')
 
-        # Ensure the user has not already checked in and not checked out
+        today = date.today()
+
+        # Ensure the user has not already checked in today
         active_attendance = Attendance.query.filter_by(user_id=user_id, office_id=office_id) \
+            .filter(Attendance.check_in_time >= today) \
             .filter(Attendance.check_out_time.is_(None)) \
             .first()
 
         if active_attendance:
-            return jsonify({"message": "User already checked in. Please check out first."}), 400
+            return jsonify({"message": "User already checked in today. Please check out first."}), 400
 
         try:
             # Save attendance to the database
@@ -760,7 +768,7 @@ def create_app():
         except Exception as e:
             return jsonify({"message": f"Error recording check-in: {str(e)}"}), 500
 
-# Route to check-out
+    # Route to check-out
     @app.route('/api/attendance/checkout', methods=['POST'])
     def check_out():
         data = request.get_json()
@@ -771,8 +779,11 @@ def create_app():
             check_out_lat = data.get('check_out_lat')
             check_out_long = data.get('check_out_long')
 
-            # Find the existing attendance record to update
+            today = date.today()
+
+            # Find today's attendance record for the user and office
             attendance = Attendance.query.filter_by(user_id=user_id, office_id=office_id) \
+                .filter(Attendance.check_in_time >= today) \
                 .filter(Attendance.check_out_time.is_(None)) \
                 .first()
 
@@ -783,9 +794,10 @@ def create_app():
                 db.session.commit()
                 return jsonify({"message": "Check-out recorded successfully"}), 201
             else:
-                return jsonify({"message": "No active check-in found or already checked out"}), 400
+                return jsonify({"message": "No active check-in found for today or already checked out"}), 400
         except Exception as e:
             return jsonify({"message": f"Error recording check-out: {str(e)}"}), 500
+
         
 
 
