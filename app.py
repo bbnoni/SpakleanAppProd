@@ -688,13 +688,56 @@ def create_app():
         
     
     
+    # Route to check attendance status for a user and office
+    @app.route('/api/attendance/status', methods=['GET'])
+    def get_attendance_status():
+        user_id = request.args.get('user_id')
+        office_id = request.args.get('office_id')
+
+        if not user_id or not office_id:
+            return jsonify({"message": "User ID and Office ID are required"}), 400
+
+        # Fetch the most recent attendance record for the user and office
+        attendance = Attendance.query.filter_by(user_id=user_id, office_id=office_id) \
+            .order_by(Attendance.created_at.desc()) \
+            .first()
+
+        if attendance:
+            attendance_history = Attendance.query.filter_by(user_id=user_id, office_id=office_id).all()
+            history_data = [
+                {
+                    'checkInTime': record.check_in_time.isoformat() if record.check_in_time else None,
+                    'checkOutTime': record.check_out_time.isoformat() if record.check_out_time else None,
+                    'checkInLat': record.check_in_lat,
+                    'checkInLong': record.check_in_long,
+                    'checkOutLat': record.check_out_lat,
+                    'checkOutLong': record.check_out_long
+                } for record in attendance_history
+            ]
+            return jsonify({
+                "check_in_time": attendance.check_in_time.isoformat() if attendance.check_in_time else None,
+                "check_in_lat": attendance.check_in_lat,
+                "check_in_long": attendance.check_in_long,
+                "check_out_time": attendance.check_out_time.isoformat() if attendance.check_out_time else None,
+                "check_out_lat": attendance.check_out_lat,
+                "check_out_long": attendance.check_out_long,
+                "attendance_history": history_data
+            }), 200
+
+        return jsonify({"message": "No attendance record found"}), 404
+
+    # Route to check-in
     @app.route('/api/attendance/checkin', methods=['POST'])
     def check_in():
         data = request.get_json()
-        user_id = data['user_id']
-        office_id = data['office_id']
-        
-        # Check if the user has an active session (checked in but not checked out)
+
+        user_id = data.get('user_id')
+        office_id = data.get('office_id')
+        check_in_time = data.get('check_in_time')
+        check_in_lat = data.get('check_in_lat')
+        check_in_long = data.get('check_in_long')
+
+        # Ensure the user has not already checked in and not checked out
         active_attendance = Attendance.query.filter_by(user_id=user_id, office_id=office_id) \
             .filter(Attendance.check_out_time.is_(None)) \
             .first()
@@ -702,17 +745,12 @@ def create_app():
         if active_attendance:
             return jsonify({"message": "User already checked in. Please check out first."}), 400
 
-        # Proceed with check-in
-        check_in_time = data.get('check_in_time')
-        check_in_lat = data.get('check_in_lat')
-        check_in_long = data.get('check_in_long')
-
         try:
             # Save attendance to the database
             attendance = Attendance(
                 user_id=user_id,
                 office_id=office_id,
-                check_in_time=check_in_time,
+                check_in_time=datetime.fromisoformat(check_in_time),
                 check_in_lat=check_in_lat,
                 check_in_long=check_in_long
             )
@@ -722,8 +760,7 @@ def create_app():
         except Exception as e:
             return jsonify({"message": f"Error recording check-in: {str(e)}"}), 500
 
-
-
+# Route to check-out
     @app.route('/api/attendance/checkout', methods=['POST'])
     def check_out():
         data = request.get_json()
@@ -735,10 +772,12 @@ def create_app():
             check_out_long = data.get('check_out_long')
 
             # Find the existing attendance record to update
-            attendance = Attendance.query.filter_by(user_id=user_id, office_id=office_id).order_by(Attendance.id.desc()).first()
+            attendance = Attendance.query.filter_by(user_id=user_id, office_id=office_id) \
+                .filter(Attendance.check_out_time.is_(None)) \
+                .first()
 
-            if attendance and attendance.check_out_time is None:
-                attendance.check_out_time = check_out_time
+            if attendance:
+                attendance.check_out_time = datetime.fromisoformat(check_out_time)
                 attendance.check_out_lat = check_out_lat
                 attendance.check_out_long = check_out_long
                 db.session.commit()
@@ -747,30 +786,6 @@ def create_app():
                 return jsonify({"message": "No active check-in found or already checked out"}), 400
         except Exception as e:
             return jsonify({"message": f"Error recording check-out: {str(e)}"}), 500
-        
-
-
-    @app.route('/api/attendance/status', methods=['GET'])
-    def get_attendance_status():
-        user_id = request.args.get('user_id')
-        office_id = request.args.get('office_id')
-
-        # Fetch the most recent attendance record for the user and office
-        attendance = Attendance.query.filter_by(user_id=user_id, office_id=office_id) \
-            .order_by(Attendance.id.desc()) \
-            .first()
-
-        if attendance:
-            return jsonify({
-                "check_in_time": attendance.check_in_time,
-                "check_in_lat": attendance.check_in_lat,
-                "check_in_long": attendance.check_in_long,
-                "check_out_time": attendance.check_out_time,
-                "check_out_lat": attendance.check_out_lat,
-                "check_out_long": attendance.check_out_long,
-            }), 200
-        else:
-            return jsonify({"message": "No attendance record found"}), 404
         
 
 
