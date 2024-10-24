@@ -797,6 +797,42 @@ def create_app():
                 return jsonify({"message": "No active check-in found for today or already checked out"}), 400
         except Exception as e:
             return jsonify({"message": f"Error recording check-out: {str(e)}"}), 500
+        
+
+
+        from datetime import datetime, date
+
+    # Route to get attendance history for a user and office
+    @app.route('/api/attendance/history', methods=['GET'])
+    def get_attendance_history():
+        user_id = request.args.get('user_id')
+        office_id = request.args.get('office_id')
+
+        if not user_id or not office_id:
+            return jsonify({"message": "User ID and Office ID are required"}), 400
+
+        try:
+            # Fetch all attendance records for the user and office
+            attendance_history = Attendance.query.filter_by(user_id=user_id, office_id=office_id).all()
+
+            if attendance_history:
+                history_data = [
+                    {
+                        'check_in_time': record.check_in_time.isoformat() if record.check_in_time else None,
+                        'check_out_time': record.check_out_time.isoformat() if record.check_out_time else None,
+                        'check_in_lat': record.check_in_lat,
+                        'check_in_long': record.check_in_long,
+                        'check_out_lat': record.check_out_lat,
+                        'check_out_long': record.check_out_long
+                    } for record in attendance_history
+                ]
+                return jsonify({"history": history_data}), 200
+            else:
+                return jsonify({"message": "No attendance history found"}), 404
+
+        except Exception as e:
+            return jsonify({"message": f"Error fetching attendance history: {str(e)}"}), 500
+
 
         
 
