@@ -183,6 +183,10 @@ def create_app():
 
         You will be required to change your password upon logging in for the first time.
 
+        You can download the Spaklean app by clicking on the following link:
+
+        [Download App](https://drive.google.com/uc?export=download&id=1ZejzQHyBm28fphnUHwQFrxEvUle5pJXb)
+
         Best regards,
         The Spaklean Team
         """
