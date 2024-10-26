@@ -1013,6 +1013,43 @@ def create_app():
             room_ids.append(new_room.id)
 
         return jsonify({"message": "Rooms added successfully", "room_ids": room_ids}), 201
+    
+
+    # Add this route in your Flask application file
+
+    @app.route('/api/admin/assign_users_to_office', methods=['POST'])
+    def assign_users_to_office():
+        data = request.get_json()
+        office_id = data.get('office_id')
+        user_ids = data.get('user_ids')
+
+        # Validate the inputs
+        if not office_id or not user_ids or not isinstance(user_ids, list):
+            return jsonify({"message": "Office ID and list of User IDs are required."}), 400
+
+        try:
+            # Fetch the office by ID
+            office = Office.query.get(office_id)
+            if not office:
+                return jsonify({"message": "Office not found."}), 404
+
+            # Fetch all users based on the provided user IDs
+            users = User.query.filter(User.id.in_(user_ids)).all()
+            if not users:
+                return jsonify({"message": "One or more users not found."}), 404
+
+            # Associate the users with the office
+            office.users.extend(users)
+
+            # Commit the changes to the database
+            db.session.commit()
+
+            return jsonify({"message": "Users assigned to office successfully."}), 200
+
+        except Exception as e:
+            # Log the error if any
+            return jsonify({"message": "An error occurred while assigning users.", "error": str(e)}), 500
+
 
 
 
