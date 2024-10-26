@@ -34,7 +34,7 @@ def create_app():
     jwt.init_app(app)
     migrate.init_app(app, db)
 
-    # MODELS
+    # MODELS#
     class User(db.Model):
         id = db.Column(db.Integer, primary_key=True)
         first_name = db.Column(db.String(64), nullable=False)  # First name
@@ -56,6 +56,7 @@ def create_app():
         rooms = db.relationship('Room', backref='office', lazy=True)
         sector = db.Column(db.String(100), nullable=False)  # Added sector field
         user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+        #user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True) 
 
         def __repr__(self):
             return f"<Office {self.name} in sector {self.sector}>"
