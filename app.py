@@ -34,6 +34,12 @@ def create_app():
     jwt.init_app(app)
     migrate.init_app(app, db)
 
+    # Add the association table for many-to-many relationships between User and Office
+    user_office = db.Table('user_office',
+        db.Column('user_id', db.Integer, db.ForeignKey('user.id'), primary_key=True),
+        db.Column('office_id', db.Integer, db.ForeignKey('office.id'), primary_key=True)
+    )
+
     # MODELS#
     class User(db.Model):
         id = db.Column(db.Integer, primary_key=True)
@@ -44,7 +50,8 @@ def create_app():
         password_hash = db.Column(db.String(128), nullable=False)
         role = db.Column(db.String(20), nullable=False)
         password_change_required = db.Column(db.Boolean, default=True)
-        offices = db.relationship('Office', backref='user', lazy=True)
+        #offices = db.relationship('Office', backref='user', lazy=True)
+        offices = db.relationship('Office', secondary=user_office, back_populates='users')
         task_submissions = db.relationship('TaskSubmission', backref='user', lazy=True)
 
         def __repr__(self):
@@ -55,8 +62,9 @@ def create_app():
         name = db.Column(db.String(120), unique=True, nullable=False)
         rooms = db.relationship('Room', backref='office', lazy=True)
         sector = db.Column(db.String(100), nullable=False)  # Added sector field
-        user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-        #user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True) 
+        #user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+        #user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+        users = db.relationship('User', secondary=user_office, back_populates='offices') 
 
         def __repr__(self):
             return f"<Office {self.name} in sector {self.sector}>"
@@ -402,8 +410,8 @@ def create_app():
         if not user:
             return jsonify({"message": "User not found"}), 404
 
-        # Get all offices assigned to the user
-        assigned_offices = Office.query.filter_by(user_id=user_id).all()
+        # Fetch all offices associated with this user via the many-to-many relationship
+        assigned_offices = user.offices
 
         if not assigned_offices:
             return jsonify({"message": "No offices assigned to this user"}), 200
@@ -423,23 +431,25 @@ def create_app():
 
 
 
+
     # Updated route to create office and room(s) and assign them to a user and zone
-    # Updated route to create office and room(s) and assign them to a user, zone, and sector
     @app.route('/api/admin/create_office_and_room', methods=['POST'])
     def create_office_and_room():
         data = request.get_json()
         office_name = data['office_name']
         room_names = data['room_names']  # Expecting a list of room names
         zone = data['zone']
-        user_id = data['user_id']
+        user_ids = data['user_ids']  # Updated to accept multiple user IDs
         sector = data['sector']  # Get sector from the request
 
-        user = User.query.get(user_id)
-        if not user:
-            return jsonify({"message": "User not found"}), 404
+        # Fetch all users based on provided user_ids
+        users = User.query.filter(User.id.in_(user_ids)).all()
+        if not users:
+            return jsonify({"message": "One or more users not found"}), 404
 
         # Create the office with sector
-        new_office = Office(name=office_name, user_id=user.id, sector=sector)
+        new_office = Office(name=office_name, sector=sector)
+        new_office.users.extend(users)  # Associate multiple users to the office
         db.session.add(new_office)
         db.session.commit()
 
@@ -460,6 +470,7 @@ def create_app():
             "office_id": new_office.id,
             "room_ids": room_ids
         }), 201
+
 
 
     @app.route('/api/users/<int:user_id>/offices/<int:office_id>/rooms/<string:zone>', methods=['GET'])
