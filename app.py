@@ -436,11 +436,15 @@ def create_app():
     @app.route('/api/admin/create_office_and_room', methods=['POST'])
     def create_office_and_room():
         data = request.get_json()
-        office_name = data['office_name']
-        room_names = data['room_names']  # Expecting a list of room names
-        zone = data['zone']
-        user_ids = data['user_ids']  # Updated to accept multiple user IDs
-        sector = data['sector']  # Get sector from the request
+        office_name = data.get('office_name')
+        room_names = data.get('room_names')  # Expecting a list of room names
+        zone = data.get('zone')
+        user_ids = data.get('user_ids')  # Updated to accept multiple user IDs
+        sector = data.get('sector')  # Get sector from the request
+
+        # Validate the required parameters
+        if not all([office_name, room_names, user_ids, zone, sector]):
+            return jsonify({"message": "Missing required fields."}), 400
 
         # Fetch all users based on provided user_ids
         users = User.query.filter(User.id.in_(user_ids)).all()
@@ -460,7 +464,7 @@ def create_app():
         for room_name in room_names:
             new_room = Room(name=room_name, zone=zone, office_id=new_office.id)
             db.session.add(new_room)
-            db.session.commit()  # Commit each room individually (optional)
+            db.session.commit()  # Commit each room individually
 
             # Append the room ID to the list
             room_ids.append(new_room.id)
@@ -470,6 +474,7 @@ def create_app():
             "office_id": new_office.id,
             "room_ids": room_ids
         }), 201
+
 
 
 
