@@ -1054,6 +1054,32 @@ def create_app():
         except Exception as e:
             # Log the error if any
             return jsonify({"message": "An error occurred while assigning users.", "error": str(e)}), 500
+        
+
+    @app.route('/api/admin/offices', methods=['GET'])
+    def get_all_offices():
+        try:
+            # Fetch all offices from the database
+            offices = Office.query.all()
+            
+            # Create a list of office data
+            offices_data = [
+                {
+                    'id': office.id,
+                    'name': office.name,
+                    'sector': office.sector,  # Assuming sector exists in the Office model
+                }
+                for office in offices
+            ]
+            
+            # Return the list of offices
+            return jsonify({"offices": offices_data}), 200
+        
+        except Exception as e:
+            # Log and handle any errors that occur
+            print(f"Error fetching offices: {e}")
+            return jsonify({"message": "Failed to load offices", "error": str(e)}), 500
+
 
 
 
