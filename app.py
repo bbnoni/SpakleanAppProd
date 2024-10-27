@@ -361,7 +361,6 @@ def create_app():
 
 
 
-
     # Route to retrieve the most recent report for a room //
     @app.route('/api/rooms/<int:room_id>/report', methods=['GET'])
     def get_room_report(room_id):
@@ -485,12 +484,24 @@ def create_app():
         if not user:
             return jsonify({"message": "User not found"}), 404
 
-        # Fetch rooms that belong to the specific office and match the requested zone
-        rooms = Room.query.filter_by(office_id=office_id, zone=zone).all()
+        # Fetch rooms that belong to the specific office, zone, and are assigned to the user
+        rooms = (
+            db.session.query(Room)
+            .join(Office)
+            .join(user_office)
+            .filter(
+                Room.office_id == office_id,
+                Room.zone == zone,
+                user_office.c.user_id == user_id
+            )
+            .all()
+        )
 
         rooms_data = [{'id': room.id, 'name': room.name, 'zone': room.zone} for room in rooms]
 
         return jsonify({"rooms": rooms_data}), 200
+    
+
     
     @app.route('/api/users/<int:user_id>/tasks', methods=['GET'])
     def get_tasks_by_user(user_id):
@@ -673,7 +684,6 @@ def create_app():
         total_facility_score = total_zone_score / zone_count
 
         return jsonify({"total_facility_score": round(total_facility_score, 2)}), 200
-
 
     
 
