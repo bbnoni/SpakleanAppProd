@@ -1036,12 +1036,13 @@ def create_app():
         # Add rooms to the existing office
         room_ids = []
         for room_name in room_names:
-            new_room = Room(name=room_name, zone=zone, office_id=office_id)
+            new_room = Room(name=room_name, zone=zone, office_id=office_id, user_id=user_id)
             db.session.add(new_room)
             db.session.commit()
             room_ids.append(new_room.id)
 
         return jsonify({"message": "Rooms added successfully", "room_ids": room_ids}), 201
+
     
 
     # Add this route in your Flask application file
