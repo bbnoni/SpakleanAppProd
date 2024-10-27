@@ -589,48 +589,49 @@ def create_app():
         zone_name = unquote(zone_name)
         print(f"Decoded zone_name: {zone_name}")
         
-        # Get the office_id from the query parameters
+        # Get the office_id and user_id from the query parameters
         office_id = request.args.get('office_id')
-        if not office_id:
-            return jsonify({"message": "office_id is required"}), 400
+        user_id = request.args.get('user_id')  # New parameter for user filtering
 
-        # Fetch rooms in the specified zone and office
+        if not office_id or not user_id:
+            return jsonify({"message": "office_id and user_id are required"}), 400
+
+        # Fetch rooms in the specified zone and office for the specific user
         rooms = Room.query.filter_by(zone=zone_name, office_id=office_id).all()
 
         if not rooms:
             print(f"No rooms found for zone: {zone_name} in office: {office_id}")
-            # Return N/A for the zone score if no rooms are found
             return jsonify({"zone_name": zone_name, "zone_score": "N/A"}), 200
 
         total_room_score = 0
         room_count = 0
 
-        # Loop through each room and fetch the latest task submission
+        # Loop through each room and fetch the latest task submission for the specific user
         for room in rooms:
-            task = TaskSubmission.query.filter_by(room_id=room.id).order_by(TaskSubmission.date_submitted.desc()).first()
+            task = TaskSubmission.query.filter_by(room_id=room.id, user_id=user_id).order_by(TaskSubmission.date_submitted.desc()).first()
             if task:
                 total_room_score += task.room_score
                 room_count += 1
 
         if room_count == 0:
-            print(f"No tasks found for zone: {zone_name} in office: {office_id}")
-            # Return N/A if no tasks have been submitted for the zone
             return jsonify({"zone_name": zone_name, "zone_score": "N/A"}), 200
 
         # Calculate the average room score for the zone
         zone_score = total_room_score / room_count
-        print(f"Zone score for {zone_name} in office {office_id}: {zone_score}")
         return jsonify({"zone_name": zone_name, "zone_score": zone_score}), 200
+
 
 
     
 
     @app.route('/api/facility/score', methods=['GET'])
     def get_total_facility_score():
-        # Get the office_id from the query parameters
+        # Get the office_id and user_id from the query parameters
         office_id = request.args.get('office_id')
-        if not office_id:
-            return jsonify({"message": "office_id is required"}), 400
+        user_id = request.args.get('user_id')  # New parameter for user filtering
+
+        if not office_id or not user_id:
+            return jsonify({"message": "office_id and user_id are required"}), 400
 
         # Fetch all unique zones from the Room table for the specified office
         zones = db.session.query(Room.zone).filter_by(office_id=office_id).distinct().all()
@@ -648,9 +649,9 @@ def create_app():
             total_room_score = 0
             room_count = 0
 
-            # Calculate the average room score for each zone in the office
+            # Calculate the average room score for each zone in the office for the specific user
             for room in rooms:
-                task = TaskSubmission.query.filter_by(room_id=room.id).order_by(TaskSubmission.date_submitted.desc()).first()
+                task = TaskSubmission.query.filter_by(room_id=room.id, user_id=user_id).order_by(TaskSubmission.date_submitted.desc()).first()
                 if task:
                     total_room_score += task.room_score
                     room_count += 1
@@ -665,10 +666,11 @@ def create_app():
         if zone_count == 0:
             return jsonify({"message": f"No zones with room scores found for office {office_id}"}), 404
 
-        # Calculate the total facility score as the average of all zone scores for the office
+        # Calculate the total facility score as the average of all zone scores for the office for the specific user
         total_facility_score = total_zone_score / zone_count
 
         return jsonify({"total_facility_score": total_facility_score}), 200
+
     
 
     # @app.route('/api/attendance', methods=['POST'])
