@@ -640,7 +640,7 @@ def create_app():
         zones = db.session.query(Room.zone).filter_by(office_id=office_id).distinct().all()
 
         if not zones:
-            return jsonify({"message": f"No zones found for office {office_id}"}), 404
+            return jsonify({"message": f"No zones found for office {office_id}", "total_facility_score": "N/A"}), 200
 
         total_zone_score = 0
         zone_count = 0
@@ -659,20 +659,21 @@ def create_app():
                     total_room_score += task.room_score
                     room_count += 1
 
-            # Skip zones with no tasks
+            # Only consider zones where there are tasks
             if room_count > 0:
                 zone_score = total_room_score / room_count
                 total_zone_score += zone_score
                 zone_count += 1
 
-        # If no zones have room scores
+        # If no zones have room scores, return a message indicating no scores are available
         if zone_count == 0:
-            return jsonify({"message": f"No zones with room scores found for office {office_id}"}), 404
+            return jsonify({"message": f"No zones with room scores found for office {office_id}", "total_facility_score": "N/A"}), 200
 
         # Calculate the total facility score as the average of all zone scores for the office for the specific user
         total_facility_score = total_zone_score / zone_count
 
-        return jsonify({"total_facility_score": total_facility_score}), 200
+        return jsonify({"total_facility_score": round(total_facility_score, 2)}), 200
+
 
     
 
