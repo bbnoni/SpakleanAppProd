@@ -74,6 +74,7 @@ def create_app():
         name = db.Column(db.String(120), nullable=False)
         zone = db.Column(db.String(120), nullable=False)  # Zone added to room
         office_id = db.Column(db.Integer, db.ForeignKey('office.id'), nullable=False)
+        user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)  # New field
         task_submissions = db.relationship('TaskSubmission', backref='room', lazy=True)
 
         def __repr__(self):
@@ -259,16 +260,24 @@ def create_app():
         data = request.get_json()
         name = data['name']
         office_id = data['office_id']
+        user_id = data['user_id']  # Expecting the user_id of the user to whom the room is assigned
 
+        # Validate office and user
         office = Office.query.get(office_id)
+        user = User.query.get(user_id)
+
         if not office:
             return jsonify({"message": "Office not found"}), 404
+        if not user:
+            return jsonify({"message": "User not found"}), 404
 
-        new_room = Room(name=name, office_id=office.id)
+        # Create a new room and assign it to the specific user
+        new_room = Room(name=name, office_id=office.id, user_id=user.id)
         db.session.add(new_room)
         db.session.commit()
 
-        return jsonify({"message": "Room created successfully"}), 201
+        return jsonify({"message": "Room created successfully", "room_id": new_room.id}), 201
+
 
     from urllib.parse import unquote
 
@@ -484,15 +493,13 @@ def create_app():
         if not user:
             return jsonify({"message": "User not found"}), 404
 
-        # Fetch rooms that belong to the specific office, zone, and are assigned to the user
+        # Fetch rooms that belong to the specific office, zone, and are assigned to the specific user
         rooms = (
             db.session.query(Room)
-            .join(Office)
-            .join(user_office)
             .filter(
                 Room.office_id == office_id,
                 Room.zone == zone,
-                user_office.c.user_id == user_id
+                Room.user_id == user_id  # Ensure the room is assigned to this specific user
             )
             .all()
         )
@@ -500,6 +507,7 @@ def create_app():
         rooms_data = [{'id': room.id, 'name': room.name, 'zone': room.zone} for room in rooms]
 
         return jsonify({"rooms": rooms_data}), 200
+
     
 
     
