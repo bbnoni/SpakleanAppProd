@@ -1184,6 +1184,65 @@ def create_app():
         except Exception as e:
             print(f"Error fetching company score: {e}")
             return jsonify({"message": "Failed to fetch company score", "error": str(e)}), 500
+        
+
+    #from flask import Flask, jsonify, request
+    from sqlalchemy import func
+    #from models import TaskSubmission, User, Office, Sector, db
+
+
+    @app.route('/api/score_summary', methods=['GET'])
+    def score_summary():
+        user_id = request.args.get('user_id')
+        if not user_id:
+            return jsonify({"error": "user_id is required"}), 400
+
+        # Fetch the user and ensure they exist
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+
+        office_id = user.office_id
+        sector_id = user.sector_id
+
+        # Define zones
+        zones = [
+            'Low Traffic Areas (Yellow Zone)',
+            'Heavy Traffic Areas (Orange Zone)',
+            'Food Service Areas (Green Zone)',
+            'High Microbial Areas (Red Zone)',
+            'Outdoors & Exteriors (Black Zone)'
+        ]
+
+        score_summary = {}
+
+        for zone in zones:
+            # Calculate user's average score for this zone
+            user_zone_score = db.session.query(func.avg(TaskSubmission.room_score))\
+                .filter_by(user_id=user_id, zone_name=zone)\
+                .scalar()
+
+            # Calculate the company's average score for this zone
+            company_zone_score = db.session.query(func.avg(TaskSubmission.room_score))\
+                .join(User, User.id == TaskSubmission.user_id)\
+                .filter(User.office_id == office_id, TaskSubmission.zone_name == zone)\
+                .scalar()
+
+            # Calculate the sector's average score for this zone
+            sector_zone_score = db.session.query(func.avg(TaskSubmission.room_score))\
+                .join(User, User.id == TaskSubmission.user_id)\
+                .filter(User.sector_id == sector_id, TaskSubmission.zone_name == zone)\
+                .scalar()
+
+            # Store scores in the summary dictionary, handle None results by using 'N/A'
+            score_summary[zone] = {
+                "yourScore": round(user_zone_score, 2) if user_zone_score is not None else "N/A",
+                "companyScore": round(company_zone_score, 2) if company_zone_score is not None else "N/A",
+                "sectorScore": round(sector_zone_score, 2) if sector_zone_score is not None else "N/A",
+            }
+
+        return jsonify(score_summary), 200
+
 
 
 
