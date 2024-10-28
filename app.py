@@ -1186,10 +1186,7 @@ def create_app():
             return jsonify({"message": "Failed to fetch company score", "error": str(e)}), 500
         
 
-    #from flask import Flask, jsonify, request
     from sqlalchemy import func
-    #from models import TaskSubmission, User, Office, Sector, db
-
 
     @app.route('/api/score_summary', methods=['GET'])
     def score_summary():
@@ -1202,8 +1199,14 @@ def create_app():
         if not user:
             return jsonify({"error": "User not found"}), 404
 
-        office_id = user.office_id
-        sector_id = user.sector_id
+        # Get the user's assigned offices
+        offices = user.offices
+        if not offices:
+            return jsonify({"error": "User is not assigned to any office"}), 404
+        
+        # For simplicity, we'll use the first office and its sector
+        office_id = offices[0].id
+        sector = offices[0].sector
 
         # Define zones
         zones = [
@@ -1222,16 +1225,17 @@ def create_app():
                 .filter_by(user_id=user_id, zone_name=zone)\
                 .scalar()
 
-            # Calculate the company's average score for this zone
+            # Calculate the company's average score for this zone in the same office
             company_zone_score = db.session.query(func.avg(TaskSubmission.room_score))\
                 .join(User, User.id == TaskSubmission.user_id)\
-                .filter(User.office_id == office_id, TaskSubmission.zone_name == zone)\
+                .filter(User.offices.any(id=office_id), TaskSubmission.zone_name == zone)\
                 .scalar()
 
             # Calculate the sector's average score for this zone
             sector_zone_score = db.session.query(func.avg(TaskSubmission.room_score))\
                 .join(User, User.id == TaskSubmission.user_id)\
-                .filter(User.sector_id == sector_id, TaskSubmission.zone_name == zone)\
+                .join(Office, Office.id == user_office.c.office_id)\
+                .filter(Office.sector == sector, TaskSubmission.zone_name == zone)\
                 .scalar()
 
             # Store scores in the summary dictionary, handle None results by using 'N/A'
@@ -1242,6 +1246,7 @@ def create_app():
             }
 
         return jsonify(score_summary), 200
+
 
 
 
