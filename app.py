@@ -292,11 +292,11 @@ def create_app():
             zone_name = unquote(data.get('zone_name'))
             print(f"Decoded zone_name: {zone_name}")  # Log decoded zone_name
 
-            task_type = data['task_type']
+            task_type = data.get('task_type')
             latitude = data.get('latitude')
             longitude = data.get('longitude')
-            user_id = int(data['user_id'])  # Ensure user_id is an integer
-            room_id = int(data['room_id'])  # Ensure room_id is an integer
+            user_id = int(data.get('user_id'))  # Ensure user_id is an integer
+            room_id = int(data.get('room_id'))  # Ensure room_id is an integer
             area_scores = data.get('area_scores', {})
             zone_score = data.get('zone_score')  # Expecting a double precision value
             facility_score = data.get('facility_score')  # Expecting a double precision value
@@ -314,6 +314,18 @@ def create_app():
                 print(f"User or Room not found: user_id={user_id}, room_id={room_id}")  # Log missing user/room
                 return jsonify({"message": "User or Room not found"}), 404
 
+            # Validate area_scores
+            if not isinstance(area_scores, dict):
+                print("Invalid area_scores format. Must be a dictionary.")
+                return jsonify({"message": "Invalid area_scores format"}), 400
+            
+            # Check each area score for valid float values
+            try:
+                area_scores = {k: float(v) for k, v in area_scores.items()}
+            except ValueError:
+                print("Invalid value in area_scores. Must be numeric.")
+                return jsonify({"message": "Invalid value in area_scores. Must be numeric."}), 400
+
             # Calculate room score from area scores
             if area_scores:
                 room_score = sum(area_scores.values()) / len(area_scores)
@@ -321,18 +333,18 @@ def create_app():
                 room_score = 0.0  # Default value if no area scores
             print(f"Calculated room_score: {room_score}")  # Log room score
 
-            # Make sure zone_score and facility_score are valid double precision values
-            if zone_score is not None:
-                zone_score = float(zone_score)
-                print(f"Valid zone_score: {zone_score}")  # Log valid zone score
-            else:
-                print("Zone score is None")  # Log if zone_score is None
-
-            if facility_score is not None:
-                facility_score = float(facility_score)
-                print(f"Valid facility_score: {facility_score}")  # Log valid facility score
-            else:
-                print("Facility score is None")  # Log if facility_score is None
+            # Convert zone_score and facility_score to floats if provided
+            try:
+                zone_score = float(zone_score) if zone_score is not None else None
+            except ValueError:
+                print("Invalid zone_score format. Must be a numeric value.")
+                return jsonify({"message": "Invalid zone_score format. Must be numeric."}), 400
+            
+            try:
+                facility_score = float(facility_score) if facility_score is not None else None
+            except ValueError:
+                print("Invalid facility_score format. Must be a numeric value.")
+                return jsonify({"message": "Invalid facility_score format. Must be numeric."}), 400
 
             # Ensure area_scores is valid JSON
             try:
@@ -342,25 +354,28 @@ def create_app():
                 return jsonify({"message": "Invalid area_scores format"}), 400
 
             # Save the task submission to the database
-            new_task = TaskSubmission(
-                task_type=task_type,
-                latitude=latitude,
-                longitude=longitude,
-                user_id=user.id,
-                room_id=room.id,
-                room_score=room_score,
-                area_scores=area_scores_json,  # Store the area scores as JSON
-                zone_name=zone_name,
-                zone_score=zone_score,  # Should be a double or None
-                facility_score=facility_score  # Should be a double or None
-            )
+            try:
+                with db.session.begin():  # Use transaction handling
+                    new_task = TaskSubmission(
+                        task_type=task_type,
+                        latitude=latitude,
+                        longitude=longitude,
+                        user_id=user.id,
+                        room_id=room.id,
+                        room_score=room_score,
+                        area_scores=area_scores_json,  # Store the area scores as JSON
+                        zone_name=zone_name,
+                        zone_score=zone_score,  # Should be a double or None
+                        facility_score=facility_score  # Should be a double or None
+                    )
+                    db.session.add(new_task)
+                print("Task submitted successfully.")  # Log successful task submission
 
-            # Commit the new task to the database
-            db.session.add(new_task)
-            db.session.commit()
-            print("Task submitted successfully.")  # Log successful task submission
+                return jsonify({"message": "Task submitted successfully", "task_id": new_task.id}), 201
 
-            return jsonify({"message": "Task submitted successfully"}), 201
+            except Exception as e:
+                print(f"Database error: {e}")
+                return jsonify({"message": "Failed to submit task", "error": str(e)}), 500
 
         except Exception as e:
             # Log any exceptions for debugging
@@ -370,10 +385,16 @@ def create_app():
 
 
 
-    # Route to retrieve the most recent report for a room //
+
     @app.route('/api/rooms/<int:room_id>/report', methods=['GET'])
     def get_room_report(room_id):
-        task = TaskSubmission.query.filter_by(room_id=room_id).order_by(TaskSubmission.date_submitted.desc()).first()
+        user_id = request.args.get('user_id')  # Get user_id from query parameter
+
+        # Fetch the most recent task submission for the room and user, if user_id is provided
+        if user_id:
+            task = TaskSubmission.query.filter_by(room_id=room_id, user_id=user_id).order_by(TaskSubmission.date_submitted.desc()).first()
+        else:
+            task = TaskSubmission.query.filter_by(room_id=room_id).order_by(TaskSubmission.date_submitted.desc()).first()
 
         if not task:
             return jsonify({"message": "No task submission found for this room"}), 404
@@ -385,14 +406,22 @@ def create_app():
             "room_name": task.room.name,
             "room_score": task.room_score,
             "area_scores": area_scores,  # Include area scores in the response
-            "zone_name": task.zone_name
+            "zone_name": task.zone_name,
+            "user_id": task.user_id,  # Include user_id for context
+            "date_submitted": task.date_submitted.isoformat()  # Include submission date
         }), 200
 
 
-    # Route to get all task submissions for a specific room
+
     @app.route('/api/rooms/<int:room_id>/tasks', methods=['GET'])
     def get_tasks_by_room(room_id):
-        tasks = TaskSubmission.query.filter_by(room_id=room_id).all()
+        user_id = request.args.get('user_id')  # Get user_id from query parameter
+
+        # Fetch all task submissions for the room, filtered by user if provided
+        if user_id:
+            tasks = TaskSubmission.query.filter_by(room_id=room_id, user_id=user_id).all()
+        else:
+            tasks = TaskSubmission.query.filter_by(room_id=room_id).all()
 
         if not tasks:
             return jsonify({"message": "No tasks found for this room"}), 404
@@ -401,15 +430,17 @@ def create_app():
         for task in tasks:
             tasks_data.append({
                 "task_type": task.task_type,
-                "date_submitted": task.date_submitted,
+                "date_submitted": task.date_submitted.isoformat(),  # Convert datetime to ISO format string
                 "room_score": task.room_score,
                 "area_scores": json.loads(task.area_scores) if task.area_scores else {},
                 "zone_name": task.zone_name,
                 "latitude": task.latitude,
-                "longitude": task.longitude
+                "longitude": task.longitude,
+                "user_id": task.user_id  # Include user_id for context
             })
 
         return jsonify({"tasks": tasks_data}), 200
+
 
     @app.route('/api/users/<int:user_id>/offices', methods=['GET'])
     def get_assigned_offices(user_id):
@@ -488,25 +519,37 @@ def create_app():
 
     @app.route('/api/users/<int:user_id>/offices/<int:office_id>/rooms/<string:zone>', methods=['GET'])
     def get_rooms_by_office_and_zone(user_id, office_id, zone):
-        user = User.query.get(user_id)
+        try:
+            # Validate if the user exists
+            user = User.query.get(user_id)
+            if not user:
+                return jsonify({"message": "User not found"}), 404
 
-        if not user:
-            return jsonify({"message": "User not found"}), 404
-
-        # Fetch rooms that belong to the specific office, zone, and are assigned to the specific user
-        rooms = (
-            db.session.query(Room)
-            .filter(
-                Room.office_id == office_id,
-                Room.zone == zone,
-                Room.user_id == user_id  # Ensure the room is assigned to this specific user
+            # Fetch rooms that belong to the specific office, zone, and are assigned to the specific user
+            rooms = (
+                db.session.query(Room)
+                .filter(
+                    Room.office_id == office_id,
+                    Room.zone == zone,
+                    Room.user_id == user_id  # Ensure the room is assigned to this specific user
+                )
+                .all()
             )
-            .all()
-        )
 
-        rooms_data = [{'id': room.id, 'name': room.name, 'zone': room.zone} for room in rooms]
+            # Check if rooms are found
+            if not rooms:
+                return jsonify({"message": "No rooms found for this user in the specified office and zone"}), 404
 
-        return jsonify({"rooms": rooms_data}), 200
+            # Prepare the response data
+            rooms_data = [{'id': room.id, 'name': room.name, 'zone': room.zone} for room in rooms]
+
+            return jsonify({"rooms": rooms_data}), 200
+        
+        except Exception as e:
+            # Log the error and return a 500 response
+            print(f"Error fetching rooms: {e}")
+            return jsonify({"message": "An error occurred while fetching rooms", "error": str(e)}), 500
+
 
     
 
@@ -608,16 +651,18 @@ def create_app():
         zone_name = unquote(zone_name)
         print(f"Decoded zone_name: {zone_name}")
         
-        # Get the office_id from the query parameters
+        # Get the office_id and user_id from the query parameters
         office_id = request.args.get('office_id')
-        if not office_id:
-            return jsonify({"message": "office_id is required"}), 400
+        user_id = request.args.get('user_id')  # New parameter for user filtering
 
-        # Fetch rooms in the specified zone and office
-        rooms = Room.query.filter_by(zone=zone_name, office_id=office_id).all()
+        if not office_id or not user_id:
+            return jsonify({"message": "office_id and user_id are required"}), 400
+
+        # Fetch rooms in the specified zone and office assigned to the specific user
+        rooms = Room.query.filter_by(zone=zone_name, office_id=office_id, user_id=user_id).all()
 
         if not rooms:
-            print(f"No rooms found for zone: {zone_name} in office: {office_id}")
+            print(f"No rooms found for zone: {zone_name} in office: {office_id} and user: {user_id}")
             # Return N/A for the zone score if no rooms are found
             return jsonify({"zone_name": zone_name, "zone_score": "N/A"}), 200
 
@@ -626,20 +671,21 @@ def create_app():
 
         # Loop through each room and fetch the latest task submission
         for room in rooms:
-            task = TaskSubmission.query.filter_by(room_id=room.id).order_by(TaskSubmission.date_submitted.desc()).first()
+            task = TaskSubmission.query.filter_by(room_id=room.id, user_id=user_id).order_by(TaskSubmission.date_submitted.desc()).first()
             if task:
                 total_room_score += task.room_score
                 room_count += 1
 
         if room_count == 0:
-            print(f"No tasks found for zone: {zone_name} in office: {office_id}")
+            print(f"No tasks found for zone: {zone_name} in office: {office_id} and user: {user_id}")
             # Return N/A if no tasks have been submitted for the zone
             return jsonify({"zone_name": zone_name, "zone_score": "N/A"}), 200
 
         # Calculate the average room score for the zone
         zone_score = total_room_score / room_count
-        print(f"Zone score for {zone_name} in office {office_id}: {zone_score}")
+        print(f"Zone score for {zone_name} in office {office_id} and user {user_id}: {zone_score}")
         return jsonify({"zone_name": zone_name, "zone_score": zone_score}), 200
+
 
 
 
@@ -648,26 +694,25 @@ def create_app():
 
     @app.route('/api/facility/score', methods=['GET'])
     def get_total_facility_score():
-        # Get the office_id and user_id from the query parameters
         office_id = request.args.get('office_id')
-        user_id = request.args.get('user_id')  # New parameter for user filtering
+        user_id = request.args.get('user_id')
 
         if not office_id or not user_id:
             return jsonify({"message": "office_id and user_id are required"}), 400
 
-        # Fetch all unique zones from the Room table for the specified office
-        zones = db.session.query(Room.zone).filter_by(office_id=office_id).distinct().all()
+        # Fetch all unique zones from the Room table for the specified office assigned to the specific user
+        zones = db.session.query(Room.zone).filter_by(office_id=office_id, user_id=user_id).distinct().all()
 
         if not zones:
-            return jsonify({"message": f"No zones found for office {office_id}", "total_facility_score": "N/A"}), 200
+            return jsonify({"message": f"No zones found for office {office_id} and user {user_id}", "total_facility_score": "N/A"}), 200
 
         total_zone_score = 0
         zone_count = 0
 
-        # Loop through each zone and calculate the zone score for the given office
+        # Loop through each zone and calculate the zone score for the given office and user
         for zone in zones:
             zone_name = zone[0]  # Zone name is fetched as a tuple (zone,)
-            rooms = Room.query.filter_by(zone=zone_name, office_id=office_id).all()
+            rooms = Room.query.filter_by(zone=zone_name, office_id=office_id, user_id=user_id).all()
             total_room_score = 0
             room_count = 0
 
@@ -686,7 +731,7 @@ def create_app():
 
         # If no zones have room scores, return a message indicating no scores are available
         if zone_count == 0:
-            return jsonify({"message": f"No zones with room scores found for office {office_id}", "total_facility_score": "N/A"}), 200
+            return jsonify({"message": f"No zones with room scores found for office {office_id} and user {user_id}", "total_facility_score": "N/A"}), 200
 
         # Calculate the total facility score as the average of all zone scores for the office for the specific user
         total_facility_score = total_zone_score / zone_count
