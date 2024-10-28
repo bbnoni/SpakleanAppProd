@@ -354,28 +354,31 @@ def create_app():
                 return jsonify({"message": "Invalid area_scores format"}), 400
 
             # Save the task submission to the database
+            new_task = TaskSubmission(
+                task_type=task_type,
+                latitude=latitude,
+                longitude=longitude,
+                user_id=user.id,
+                room_id=room.id,
+                room_score=room_score,
+                area_scores=area_scores_json,  # Store the area scores as JSON
+                zone_name=zone_name,
+                zone_score=zone_score,  # Should be a double or None
+                facility_score=facility_score  # Should be a double or None
+            )
+
+            # Use a try-except-finally block for database transactions
             try:
-                with db.session.begin():  # Use transaction handling
-                    new_task = TaskSubmission(
-                        task_type=task_type,
-                        latitude=latitude,
-                        longitude=longitude,
-                        user_id=user.id,
-                        room_id=room.id,
-                        room_score=room_score,
-                        area_scores=area_scores_json,  # Store the area scores as JSON
-                        zone_name=zone_name,
-                        zone_score=zone_score,  # Should be a double or None
-                        facility_score=facility_score  # Should be a double or None
-                    )
-                    db.session.add(new_task)
+                db.session.add(new_task)
+                db.session.commit()
                 print("Task submitted successfully.")  # Log successful task submission
-
                 return jsonify({"message": "Task submitted successfully", "task_id": new_task.id}), 201
-
-            except Exception as e:
-                print(f"Database error: {e}")
-                return jsonify({"message": "Failed to submit task", "error": str(e)}), 500
+            except Exception as db_error:
+                db.session.rollback()  # Rollback on error
+                print(f"Database error: {db_error}")
+                return jsonify({"message": "Failed to submit task", "error": str(db_error)}), 500
+            finally:
+                db.session.close()  # Ensure session is closed
 
         except Exception as e:
             # Log any exceptions for debugging
