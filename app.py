@@ -1227,13 +1227,13 @@ def create_app():
 
             # Calculate the company's average score for this zone in the same office
             company_zone_score = db.session.query(func.avg(TaskSubmission.room_score))\
-                .join(User, User.id == TaskSubmission.user_id)\
-                .filter(User.offices.any(id=office_id), TaskSubmission.zone_name == zone)\
+                .join(user_office, user_office.c.user_id == TaskSubmission.user_id)\
+                .filter(user_office.c.office_id == office_id, TaskSubmission.zone_name == zone)\
                 .scalar()
 
             # Calculate the sector's average score for this zone
             sector_zone_score = db.session.query(func.avg(TaskSubmission.room_score))\
-                .join(User, User.id == TaskSubmission.user_id)\
+                .join(user_office, user_office.c.user_id == TaskSubmission.user_id)\
                 .join(Office, Office.id == user_office.c.office_id)\
                 .filter(Office.sector == sector, TaskSubmission.zone_name == zone)\
                 .scalar()
@@ -1246,6 +1246,7 @@ def create_app():
             }
 
         return jsonify(score_summary), 200
+
 
 
 
