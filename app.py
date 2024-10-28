@@ -1152,6 +1152,39 @@ def create_app():
             # Log and handle any errors that occur
             print(f"Error fetching offices: {e}")
             return jsonify({"message": "Failed to load offices", "error": str(e)}), 500
+        
+
+    @app.route('/api/offices/<int:office_id>/company_score', methods=['GET'])
+    def get_company_score(office_id):
+        try:
+            # Fetch all users associated with the office
+            users = User.query.filter_by(office_id=office_id).all()
+            
+            if not users:
+                return jsonify({"message": "No users found for this office"}), 404
+            
+            # Collect room scores from all tasks related to users in this office
+            total_score = 0
+            task_count = 0
+            
+            for user in users:
+                tasks = TaskSubmission.query.filter_by(user_id=user.id).all()
+                for task in tasks:
+                    total_score += task.room_score
+                    task_count += 1
+            
+            # Calculate the average (company) score
+            company_score = (total_score / task_count) if task_count > 0 else 0.0
+            
+            return jsonify({
+                "office_id": office_id,
+                "company_score": round(company_score, 2)  # Rounded to 2 decimal places
+            }), 200
+            
+        except Exception as e:
+            print(f"Error fetching company score: {e}")
+            return jsonify({"message": "Failed to fetch company score", "error": str(e)}), 500
+
 
 
 
