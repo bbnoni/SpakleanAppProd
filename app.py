@@ -1199,14 +1199,19 @@ def create_app():
         if not user:
             return jsonify({"error": "User not found"}), 404
 
-        # Get the user's assigned offices
-        offices = user.offices
-        if not offices:
-            return jsonify({"error": "User is not assigned to any office"}), 404
-        
-        # For simplicity, we'll use the first office and its sector
-        office_id = offices[0].id
-        sector = offices[0].sector
+        # Find the user's office and sector via the user_office relationship
+        office = (
+            db.session.query(Office)
+            .join(user_office, Office.id == user_office.c.office_id)
+            .filter(user_office.c.user_id == user_id)
+            .first()
+        )
+
+        if not office:
+            return jsonify({"error": "No office found for the user"}), 404
+
+        sector = office.sector
+        office_id = office.id
 
         # Define zones
         zones = [
@@ -1222,18 +1227,18 @@ def create_app():
         for zone in zones:
             # Calculate user's average score for this zone
             user_zone_score = db.session.query(func.avg(TaskSubmission.room_score))\
-                .filter_by(user_id=user_id, zone_name=zone)\
+                .filter(TaskSubmission.user_id == user_id, TaskSubmission.zone_name == zone)\
                 .scalar()
 
-            # Calculate the company's average score for this zone in the same office
+            # Calculate the company's average score for this zone
             company_zone_score = db.session.query(func.avg(TaskSubmission.room_score))\
-                .join(user_office, user_office.c.user_id == TaskSubmission.user_id)\
+                .join(user_office, TaskSubmission.user_id == user_office.c.user_id)\
                 .filter(user_office.c.office_id == office_id, TaskSubmission.zone_name == zone)\
                 .scalar()
 
             # Calculate the sector's average score for this zone
             sector_zone_score = db.session.query(func.avg(TaskSubmission.room_score))\
-                .join(user_office, user_office.c.user_id == TaskSubmission.user_id)\
+                .join(user_office, TaskSubmission.user_id == user_office.c.user_id)\
                 .join(Office, Office.id == user_office.c.office_id)\
                 .filter(Office.sector == sector, TaskSubmission.zone_name == zone)\
                 .scalar()
@@ -1246,6 +1251,9 @@ def create_app():
             }
 
         return jsonify(score_summary), 200
+
+
+
 
 
 
