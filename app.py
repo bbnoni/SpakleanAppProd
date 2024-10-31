@@ -695,66 +695,51 @@ def create_app():
 
     
 
-    #from sqlalchemy import func
-
     @app.route('/api/facility/score', methods=['GET'])
     def get_total_facility_score():
         office_id = request.args.get('office_id')
         user_id = request.args.get('user_id')
-        month = request.args.get('month', type=int)
-        year = request.args.get('year', type=int)
-
-        # Log incoming request parameters for debugging
-        print(f"Request received: office_id={office_id}, user_id={user_id}, month={month}, year={year}")
 
         if not office_id or not user_id:
             return jsonify({"message": "office_id and user_id are required"}), 400
 
-        # Get all zones in the specified office and assigned to the user
+        # Fetch all unique zones from the Room table for the specified office assigned to the specific user
         zones = db.session.query(Room.zone).filter_by(office_id=office_id, user_id=user_id).distinct().all()
+
         if not zones:
-            return jsonify({"total_facility_score": "N/A"}), 200
+            return jsonify({"message": f"No zones found for office {office_id} and user {user_id}", "total_facility_score": "N/A"}), 200
 
         total_zone_score = 0
         zone_count = 0
 
+        # Loop through each zone and calculate the zone score for the given office and user
         for zone in zones:
-            zone_name = zone[0]
+            zone_name = zone[0]  # Zone name is fetched as a tuple (zone,)
             rooms = Room.query.filter_by(zone=zone_name, office_id=office_id, user_id=user_id).all()
             total_room_score = 0
             room_count = 0
 
-            # Calculate the room score for each room within the specified month and year
+            # Calculate the average room score for each zone in the office for the specific user
             for room in rooms:
-                query = TaskSubmission.query.filter_by(room_id=room.id, user_id=user_id)
-
-                # Add filtering for month and year on date_submitted
-                if month and year:
-                    query = query.filter(
-                        func.extract('month', TaskSubmission.date_submitted) == month,
-                        func.extract('year', TaskSubmission.date_submitted) == year
-                    )
-
-                # Fetch the latest task in the given month and year, or None if none exist
-                task = query.order_by(TaskSubmission.date_submitted.desc()).first()
+                task = TaskSubmission.query.filter_by(room_id=room.id, user_id=user_id).order_by(TaskSubmission.date_submitted.desc()).first()
                 if task:
                     total_room_score += task.room_score
                     room_count += 1
 
+            # Only consider zones where there are tasks
             if room_count > 0:
                 zone_score = total_room_score / room_count
                 total_zone_score += zone_score
                 zone_count += 1
 
+        # If no zones have room scores, return a message indicating no scores are available
         if zone_count == 0:
-            # Return "N/A" if no tasks found for the month/year
-            return jsonify({"total_facility_score": "N/A"}), 200
+            return jsonify({"message": f"No zones with room scores found for office {office_id} and user {user_id}", "total_facility_score": "N/A"}), 200
 
-        # Calculate the total facility score as the average zone score
+        # Calculate the total facility score as the average of all zone scores for the office for the specific user
         total_facility_score = total_zone_score / zone_count
+
         return jsonify({"total_facility_score": round(total_facility_score, 2)}), 200
-
-
 
     
 
