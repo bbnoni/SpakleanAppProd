@@ -695,63 +695,65 @@ def create_app():
 
     
 
+    #from sqlalchemy import func
+
     @app.route('/api/facility/score', methods=['GET'])
     def get_total_facility_score():
         office_id = request.args.get('office_id')
         user_id = request.args.get('user_id')
-        month = request.args.get('month', type=int)  # Expecting integer month (1-12)
-        year = request.args.get('year', type=int)    # Expecting integer year (e.g., 2024)
+        month = request.args.get('month', type=int)
+        year = request.args.get('year', type=int)
+
+        # Log incoming request parameters for debugging
+        print(f"Request received: office_id={office_id}, user_id={user_id}, month={month}, year={year}")
 
         if not office_id or not user_id:
             return jsonify({"message": "office_id and user_id are required"}), 400
 
-        # Fetch all unique zones from the Room table for the specified office assigned to the specific user
+        # Get all zones in the specified office and assigned to the user
         zones = db.session.query(Room.zone).filter_by(office_id=office_id, user_id=user_id).distinct().all()
-
         if not zones:
-            return jsonify({"message": f"No zones found for office {office_id} and user {user_id}", "total_facility_score": "N/A"}), 200
+            return jsonify({"total_facility_score": "N/A"}), 200
 
         total_zone_score = 0
         zone_count = 0
 
-        # Loop through each zone and calculate the zone score for the given office and user
         for zone in zones:
-            zone_name = zone[0]  # Zone name is fetched as a tuple (zone,)
+            zone_name = zone[0]
             rooms = Room.query.filter_by(zone=zone_name, office_id=office_id, user_id=user_id).all()
             total_room_score = 0
             room_count = 0
 
-            # Calculate the average room score for each zone in the office for the specific user
+            # Calculate the room score for each room within the specified month and year
             for room in rooms:
                 query = TaskSubmission.query.filter_by(room_id=room.id, user_id=user_id)
-                
-                # Filter by month and year if provided
+
+                # Add filtering for month and year on date_submitted
                 if month and year:
                     query = query.filter(
-                        db.extract('month', TaskSubmission.date_submitted) == month,
-                        db.extract('year', TaskSubmission.date_submitted) == year
+                        func.extract('month', TaskSubmission.date_submitted) == month,
+                        func.extract('year', TaskSubmission.date_submitted) == year
                     )
 
-                # Get the latest task submission for the filtered date
+                # Fetch the latest task in the given month and year, or None if none exist
                 task = query.order_by(TaskSubmission.date_submitted.desc()).first()
                 if task:
                     total_room_score += task.room_score
                     room_count += 1
 
-            # Only consider zones where there are tasks
             if room_count > 0:
                 zone_score = total_room_score / room_count
                 total_zone_score += zone_score
                 zone_count += 1
 
-        # If no zones have room scores, return a message indicating no scores are available
         if zone_count == 0:
-            return jsonify({"message": f"No zones with room scores found for office {office_id} and user {user_id}", "total_facility_score": "N/A"}), 200
+            # Return "N/A" if no tasks found for the month/year
+            return jsonify({"total_facility_score": "N/A"}), 200
 
-        # Calculate the total facility score as the average of all zone scores for the office for the specific user
+        # Calculate the total facility score as the average zone score
         total_facility_score = total_zone_score / zone_count
-
         return jsonify({"total_facility_score": round(total_facility_score, 2)}), 200
+
 
 
     
