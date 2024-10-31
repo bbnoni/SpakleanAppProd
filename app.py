@@ -699,6 +699,8 @@ def create_app():
     def get_total_facility_score():
         office_id = request.args.get('office_id')
         user_id = request.args.get('user_id')
+        month = request.args.get('month', type=int)  # Expecting integer month (1-12)
+        year = request.args.get('year', type=int)    # Expecting integer year (e.g., 2024)
 
         if not office_id or not user_id:
             return jsonify({"message": "office_id and user_id are required"}), 400
@@ -721,7 +723,17 @@ def create_app():
 
             # Calculate the average room score for each zone in the office for the specific user
             for room in rooms:
-                task = TaskSubmission.query.filter_by(room_id=room.id, user_id=user_id).order_by(TaskSubmission.date_submitted.desc()).first()
+                query = TaskSubmission.query.filter_by(room_id=room.id, user_id=user_id)
+                
+                # Filter by month and year if provided
+                if month and year:
+                    query = query.filter(
+                        db.extract('month', TaskSubmission.date_submitted) == month,
+                        db.extract('year', TaskSubmission.date_submitted) == year
+                    )
+
+                # Get the latest task submission for the filtered date
+                task = query.order_by(TaskSubmission.date_submitted.desc()).first()
                 if task:
                     total_room_score += task.room_score
                     room_count += 1
@@ -740,6 +752,7 @@ def create_app():
         total_facility_score = total_zone_score / zone_count
 
         return jsonify({"total_facility_score": round(total_facility_score, 2)}), 200
+
 
     
 
