@@ -648,16 +648,21 @@ def create_app():
     
     from urllib.parse import unquote
 
+    from sqlalchemy import extract  # Import extract for month/year filtering
+
     @app.route('/api/zones/<string:zone_name>/score', methods=['GET'])
     def get_zone_score(zone_name):
         # Decode the URL-encoded zone_name
         zone_name = unquote(zone_name)
         print(f"Decoded zone_name: {zone_name}")
-        
-        # Get the office_id and user_id from the query parameters
-        office_id = request.args.get('office_id')
-        user_id = request.args.get('user_id')  # New parameter for user filtering
 
+        # Get the office_id, user_id, month, and year from the query parameters
+        office_id = request.args.get('office_id')
+        user_id = request.args.get('user_id')
+        month = request.args.get('month', type=int)  # Get month as an integer
+        year = request.args.get('year', type=int)    # Get year as an integer
+
+        # Validate required parameters
         if not office_id or not user_id:
             return jsonify({"message": "office_id and user_id are required"}), 400
 
@@ -666,28 +671,38 @@ def create_app():
 
         if not rooms:
             print(f"No rooms found for zone: {zone_name} in office: {office_id} and user: {user_id}")
-            # Return N/A for the zone score if no rooms are found
             return jsonify({"zone_name": zone_name, "zone_score": "N/A"}), 200
 
         total_room_score = 0
         room_count = 0
 
-        # Loop through each room and fetch the latest task submission
+        # Loop through each room and fetch task submissions, optionally filtering by month and year
         for room in rooms:
-            task = TaskSubmission.query.filter_by(room_id=room.id, user_id=user_id).order_by(TaskSubmission.date_submitted.desc()).first()
-            if task:
+            query = TaskSubmission.query.filter_by(room_id=room.id, user_id=user_id)
+            
+            # Apply month and year filtering if provided
+            if month and year:
+                query = query.filter(
+                    extract('month', TaskSubmission.date_submitted) == month,
+                    extract('year', TaskSubmission.date_submitted) == year
+                )
+            
+            # Fetch all tasks for the specified room, month, and year
+            tasks = query.all()
+            
+            for task in tasks:
                 total_room_score += task.room_score
                 room_count += 1
 
         if room_count == 0:
-            print(f"No tasks found for zone: {zone_name} in office: {office_id} and user: {user_id}")
-            # Return N/A if no tasks have been submitted for the zone
+            print(f"No tasks found for zone: {zone_name} in office: {office_id}, user: {user_id}, month: {month}, year: {year}")
             return jsonify({"zone_name": zone_name, "zone_score": "N/A"}), 200
 
         # Calculate the average room score for the zone
         zone_score = total_room_score / room_count
-        print(f"Zone score for {zone_name} in office {office_id} and user {user_id}: {zone_score}")
-        return jsonify({"zone_name": zone_name, "zone_score": zone_score}), 200
+        print(f"Zone score for {zone_name} in office {office_id}, user {user_id}, month {month}, year {year}: {zone_score}")
+        return jsonify({"zone_name": zone_name, "zone_score": round(zone_score, 2)}), 200
+
 
 
 
