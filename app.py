@@ -710,10 +710,14 @@ def create_app():
 
     
 
+    #from sqlalchemy import extract  # Import extract for month/year filtering
+
     @app.route('/api/facility/score', methods=['GET'])
     def get_total_facility_score():
         office_id = request.args.get('office_id')
         user_id = request.args.get('user_id')
+        month = request.args.get('month', type=int)  # Get month as an integer
+        year = request.args.get('year', type=int)    # Get year as an integer
 
         if not office_id or not user_id:
             return jsonify({"message": "office_id and user_id are required"}), 400
@@ -734,10 +738,19 @@ def create_app():
             total_room_score = 0
             room_count = 0
 
-            # Calculate the average room score for each zone in the office for the specific user
+            # Calculate the average room score for each zone in the office for the specific user, optionally filtering by month and year
             for room in rooms:
-                task = TaskSubmission.query.filter_by(room_id=room.id, user_id=user_id).order_by(TaskSubmission.date_submitted.desc()).first()
-                if task:
+                query = TaskSubmission.query.filter_by(room_id=room.id, user_id=user_id)
+
+                # Apply month and year filtering if provided
+                if month and year:
+                    query = query.filter(
+                        extract('month', TaskSubmission.date_submitted) == month,
+                        extract('year', TaskSubmission.date_submitted) == year
+                    )
+
+                tasks = query.all()
+                for task in tasks:
                     total_room_score += task.room_score
                     room_count += 1
 
@@ -755,6 +768,7 @@ def create_app():
         total_facility_score = total_zone_score / zone_count
 
         return jsonify({"total_facility_score": round(total_facility_score, 2)}), 200
+
 
     
 
