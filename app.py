@@ -118,6 +118,21 @@ def create_app():
             return f'<Attendance {self.id} for User {self.user_id}>'
         
 
+    class MonthlyScoreSummary(db.Model):
+        id = db.Column(db.Integer, primary_key=True)
+        month = db.Column(db.Integer, nullable=False)
+        year = db.Column(db.Integer, nullable=False)
+        office_id = db.Column(db.Integer, db.ForeignKey('office.id'), nullable=False)
+        user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+        zone_name = db.Column(db.String(120), nullable=True)  # Optional if not a specific zone
+        total_zone_score = db.Column(db.Float, nullable=True)
+        total_facility_score = db.Column(db.Float, nullable=True)
+
+        def __repr__(self):
+            return f"<MonthlyScoreSummary Month={self.month} Year={self.year} Office={self.office_id} User={self.user_id}>"
+
+        
+
 
 
 
@@ -282,6 +297,8 @@ def create_app():
     from urllib.parse import unquote
 
 
+    from sqlalchemy import func, extract  # Import necessary SQLAlchemy functions
+
     @app.route('/api/tasks/submit', methods=['POST'])
     def submit_task():
         data = request.get_json()
@@ -372,6 +389,16 @@ def create_app():
                 db.session.add(new_task)
                 db.session.commit()
                 print("Task submitted successfully.")  # Log successful task submission
+
+                # After committing the new task, update the monthly score summary
+                update_monthly_score_summary(
+                    office_id=room.office_id,
+                    user_id=user.id,
+                    zone_name=zone_name,
+                    year=new_task.date_submitted.year,
+                    month=new_task.date_submitted.month
+                )
+
                 return jsonify({"message": "Task submitted successfully", "task_id": new_task.id}), 201
             except Exception as db_error:
                 db.session.rollback()  # Rollback on error
@@ -384,6 +411,7 @@ def create_app():
             # Log any exceptions for debugging
             print(f"Error submitting task: {e}")
             return jsonify({"message": "Failed to submit task", "error": str(e)}), 500
+
 
 
 
@@ -652,56 +680,58 @@ def create_app():
 
     @app.route('/api/zones/<string:zone_name>/score', methods=['GET'])
     def get_zone_score(zone_name):
-        # Decode the URL-encoded zone_name
         zone_name = unquote(zone_name)
-        print(f"Decoded zone_name: {zone_name}")
-
-        # Get the office_id, user_id, month, and year from the query parameters
         office_id = request.args.get('office_id')
         user_id = request.args.get('user_id')
-        month = request.args.get('month', type=int)  # Get month as an integer
-        year = request.args.get('year', type=int)    # Get year as an integer
+        month = request.args.get('month', type=int) or datetime.now().month
+        year = request.args.get('year', type=int) or datetime.now().year
 
-        # Validate required parameters
         if not office_id or not user_id:
             return jsonify({"message": "office_id and user_id are required"}), 400
 
-        # Fetch rooms in the specified zone and office assigned to the specific user
         rooms = Room.query.filter_by(zone=zone_name, office_id=office_id, user_id=user_id).all()
-
         if not rooms:
-            print(f"No rooms found for zone: {zone_name} in office: {office_id} and user: {user_id}")
             return jsonify({"zone_name": zone_name, "zone_score": "N/A"}), 200
 
         total_room_score = 0
         room_count = 0
 
-        # Loop through each room and fetch task submissions, optionally filtering by month and year
         for room in rooms:
             query = TaskSubmission.query.filter_by(room_id=room.id, user_id=user_id)
-            
-            # Apply month and year filtering if provided
-            if month and year:
-                query = query.filter(
-                    extract('month', TaskSubmission.date_submitted) == month,
-                    extract('year', TaskSubmission.date_submitted) == year
-                )
-            
-            # Fetch all tasks for the specified room, month, and year
+            query = query.filter(
+                extract('month', TaskSubmission.date_submitted) == month,
+                extract('year', TaskSubmission.date_submitted) == year
+            )
             tasks = query.all()
-            
+
             for task in tasks:
-                total_room_score += task.room_score
-                room_count += 1
+                if task.room_score is not None:
+                    total_room_score += task.room_score
+                    room_count += 1
 
         if room_count == 0:
-            print(f"No tasks found for zone: {zone_name} in office: {office_id}, user: {user_id}, month: {month}, year: {year}")
             return jsonify({"zone_name": zone_name, "zone_score": "N/A"}), 200
 
-        # Calculate the average room score for the zone
+        # Calculate the zone score for the month
         zone_score = total_room_score / room_count
-        print(f"Zone score for {zone_name} in office {office_id}, user {user_id}, month {month}, year {year}: {zone_score}")
+
+        # Update or insert monthly score summary
+        monthly_summary = MonthlyScoreSummary.query.filter_by(
+            month=month, year=year, office_id=office_id, user_id=user_id, zone_name=zone_name
+        ).first()
+
+        if not monthly_summary:
+            monthly_summary = MonthlyScoreSummary(
+                month=month, year=year, office_id=office_id, user_id=user_id, zone_name=zone_name, total_zone_score=zone_score
+            )
+            db.session.add(monthly_summary)
+        else:
+            monthly_summary.total_zone_score = zone_score
+
+        db.session.commit()
+
         return jsonify({"zone_name": zone_name, "zone_score": round(zone_score, 2)}), 200
+
 
 
 
@@ -716,58 +746,65 @@ def create_app():
     def get_total_facility_score():
         office_id = request.args.get('office_id')
         user_id = request.args.get('user_id')
-        month = request.args.get('month', type=int)  # Get month as an integer
-        year = request.args.get('year', type=int)    # Get year as an integer
+        month = request.args.get('month', type=int) or datetime.now().month
+        year = request.args.get('year', type=int) or datetime.now().year
 
         if not office_id or not user_id:
             return jsonify({"message": "office_id and user_id are required"}), 400
 
-        # Fetch all unique zones from the Room table for the specified office assigned to the specific user
         zones = db.session.query(Room.zone).filter_by(office_id=office_id, user_id=user_id).distinct().all()
-
         if not zones:
-            return jsonify({"message": f"No zones found for office {office_id} and user {user_id}", "total_facility_score": "N/A"}), 200
+            return jsonify({"total_facility_score": "N/A"}), 200
 
         total_zone_score = 0
         zone_count = 0
 
-        # Loop through each zone and calculate the zone score for the given office and user
         for zone in zones:
-            zone_name = zone[0]  # Zone name is fetched as a tuple (zone,)
+            zone_name = zone[0]
             rooms = Room.query.filter_by(zone=zone_name, office_id=office_id, user_id=user_id).all()
             total_room_score = 0
             room_count = 0
 
-            # Calculate the average room score for each zone in the office for the specific user, optionally filtering by month and year
             for room in rooms:
                 query = TaskSubmission.query.filter_by(room_id=room.id, user_id=user_id)
-
-                # Apply month and year filtering if provided
-                if month and year:
-                    query = query.filter(
-                        extract('month', TaskSubmission.date_submitted) == month,
-                        extract('year', TaskSubmission.date_submitted) == year
-                    )
-
+                query = query.filter(
+                    extract('month', TaskSubmission.date_submitted) == month,
+                    extract('year', TaskSubmission.date_submitted) == year
+                )
                 tasks = query.all()
-                for task in tasks:
-                    total_room_score += task.room_score
-                    room_count += 1
 
-            # Only consider zones where there are tasks
+                for task in tasks:
+                    if task.room_score is not None:
+                        total_room_score += task.room_score
+                        room_count += 1
+
             if room_count > 0:
                 zone_score = total_room_score / room_count
                 total_zone_score += zone_score
                 zone_count += 1
 
-        # If no zones have room scores, return a message indicating no scores are available
         if zone_count == 0:
-            return jsonify({"message": f"No zones with room scores found for office {office_id} and user {user_id}", "total_facility_score": "N/A"}), 200
+            return jsonify({"total_facility_score": "N/A"}), 200
 
-        # Calculate the total facility score as the average of all zone scores for the office for the specific user
         total_facility_score = total_zone_score / zone_count
 
+        # Update or insert into monthly summary table
+        monthly_summary = MonthlyScoreSummary.query.filter_by(
+            month=month, year=year, office_id=office_id, user_id=user_id, zone_name=None
+        ).first()
+
+        if not monthly_summary:
+            monthly_summary = MonthlyScoreSummary(
+                month=month, year=year, office_id=office_id, user_id=user_id, total_facility_score=total_facility_score
+            )
+            db.session.add(monthly_summary)
+        else:
+            monthly_summary.total_facility_score = total_facility_score
+
+        db.session.commit()
+
         return jsonify({"total_facility_score": round(total_facility_score, 2)}), 200
+
 
 
     
@@ -1280,19 +1317,65 @@ def create_app():
             }
 
         return jsonify(score_summary), 200
+    
+        # Define the helper function
+    def update_monthly_score_summary(office_id, user_id, zone_name, year, month):
+        # Calculate total zone score for the given month
+        total_zone_score = (
+            db.session.query(func.avg(TaskSubmission.room_score))
+            .join(Room, TaskSubmission.room_id == Room.id)
+            .filter(
+                TaskSubmission.user_id == user_id,
+                Room.office_id == office_id,
+                TaskSubmission.zone_name == zone_name,
+                func.extract('year', TaskSubmission.date_submitted) == year,
+                func.extract('month', TaskSubmission.date_submitted) == month
+            )
+            .scalar()
+        )
+        
+        # Calculate total facility score for the month across all zones
+        total_facility_score = (
+            db.session.query(func.avg(TaskSubmission.room_score))
+            .join(Room, TaskSubmission.room_id == Room.id)
+            .filter(
+                TaskSubmission.user_id == user_id,
+                Room.office_id == office_id,
+                func.extract('year', TaskSubmission.date_submitted) == year,
+                func.extract('month', TaskSubmission.date_submitted) == month
+            )
+            .scalar()
+        )
 
+        # Check if there's an existing record in monthly_score_summary for the month, year, user, office, and zone
+        summary_record = MonthlyScoreSummary.query.filter_by(
+            office_id=office_id,
+            user_id=user_id,
+            zone_name=zone_name,
+            year=year,
+            month=month
+        ).first()
+        
+        if summary_record:
+            # Update the existing record
+            summary_record.total_zone_score = total_zone_score
+            summary_record.total_facility_score = total_facility_score
+        else:
+            # Insert a new record
+            new_summary = MonthlyScoreSummary(
+                office_id=office_id,
+                user_id=user_id,
+                zone_name=zone_name,
+                year=year,
+                month=month,
+                total_zone_score=total_zone_score,
+                total_facility_score=total_facility_score
+            )
+            db.session.add(new_summary)
 
+        db.session.commit()
 
-
-
-
-
-
-
-
-
-
-
+        
 
 
 
