@@ -503,6 +503,8 @@ def create_app():
 
 
     # Updated route to create office and room(s) and assign them to a user and zone
+    from sqlalchemy.exc import IntegrityError
+
     @app.route('/api/admin/create_office_and_room', methods=['POST'])
     def create_office_and_room():
         data = request.get_json()
@@ -516,34 +518,49 @@ def create_app():
         if not all([office_name, room_names, user_ids, zone, sector]):
             return jsonify({"message": "Missing required fields."}), 400
 
-        # Fetch all users based on provided user_ids
-        users = User.query.filter(User.id.in_(user_ids)).all()
-        if not users:
-            return jsonify({"message": "One or more users not found"}), 404
+        # Check if an office with the given name already exists
+        existing_office = Office.query.filter_by(name=office_name).first()
+        if existing_office:
+            # If the office exists, return an error indicating the conflict
+            return jsonify({"message": f"Office with name '{office_name}' already exists."}), 409  # 409 Conflict
 
-        # Create the office with sector
-        new_office = Office(name=office_name, sector=sector)
-        new_office.users.extend(users)  # Associate multiple users to the office
-        db.session.add(new_office)
-        db.session.commit()
+        try:
+            # Fetch all users based on provided user_ids
+            users = User.query.filter(User.id.in_(user_ids)).all()
+            if not users:
+                return jsonify({"message": "One or more users not found"}), 404
 
-        # List to store the created room IDs
-        room_ids = []
+            # Create the new office with sector and associate users
+            new_office = Office(name=office_name, sector=sector)
+            new_office.users.extend(users)  # Associate multiple users to the office
+            db.session.add(new_office)
+            db.session.commit()
 
-        # Create each room under the office and assign it to the zone
-        for room_name in room_names:
-            new_room = Room(name=room_name, zone=zone, office_id=new_office.id)
-            db.session.add(new_room)
-            db.session.commit()  # Commit each room individually
+            # List to store the created room IDs
+            room_ids = []
 
-            # Append the room ID to the list
-            room_ids.append(new_room.id)
+            # Create each room under the office and assign it to the zone
+            for room_name in room_names:
+                new_room = Room(name=room_name, zone=zone, office_id=new_office.id)
+                db.session.add(new_room)
+                db.session.commit()  # Commit each room individually
 
-        return jsonify({
-            "message": "Office and Rooms created successfully",
-            "office_id": new_office.id,
-            "room_ids": room_ids
-        }), 201
+                # Append the room ID to the list
+                room_ids.append(new_room.id)
+
+            return jsonify({
+                "message": "Office and Rooms created successfully",
+                "office_id": new_office.id,
+                "room_ids": room_ids
+            }), 201
+
+        except IntegrityError as e:
+            db.session.rollback()  # Roll back the session if there’s an integrity error
+            return jsonify({"message": "Failed to create office and rooms due to a database constraint.", "error": str(e)}), 500
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({"message": "An error occurred", "error": str(e)}), 500
+
 
 
 
