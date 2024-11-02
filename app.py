@@ -509,13 +509,11 @@ def create_app():
     def create_office_and_room():
         data = request.get_json()
         office_name = data.get('office_name')
-        room_names = data.get('room_names')  # Expecting a list of room names
-        zone = data.get('zone')
         user_ids = data.get('user_ids')  # Updated to accept multiple user IDs
         sector = data.get('sector')  # Get sector from the request
 
-        # Validate the required parameters
-        if not all([office_name, room_names, user_ids, zone, sector]):
+        # Validate the required parameters (room_names and zone no longer required)
+        if not all([office_name, user_ids, sector]):
             return jsonify({"message": "Missing required fields."}), 400
 
         # Check if an office with the given name already exists
@@ -535,39 +533,26 @@ def create_app():
             db.session.add(new_office)
             db.session.commit()  # Commit the office creation
 
-            # List to store the created room IDs
-            room_ids = []
-
-            # Attempt to create each room under the office and assign it to the zone
-            for room_name in room_names:
-                new_room = Room(name=room_name, zone=zone, office_id=new_office.id)
-                db.session.add(new_room)
-                room_ids.append(new_room.id)
-
-            # Commit all rooms in a single transaction after adding them to the session
-            db.session.commit()
-
             return jsonify({
-                "message": "Office and Rooms created successfully",
-                "office_id": new_office.id,
-                "room_ids": room_ids
+                "message": "Office created successfully",
+                "office_id": new_office.id
             }), 201
 
         except IntegrityError as e:
             db.session.rollback()
-            # Check if the error is due to a room name conflict or another constraint
+            # Check if the error is due to a unique constraint on office name or another constraint
+            error_message = "An IntegrityError occurred when creating the office."
             if "duplicate key" in str(e.orig):
-                error_message = "A room with one of the provided names already exists or another constraint was violated."
-            else:
-                error_message = "An IntegrityError occurred when creating rooms."
+                error_message = f"Office with name '{office_name}' already exists."
             
-            print(f"IntegrityError during room creation: {e}")
+            print(f"IntegrityError during office creation: {e}")
             return jsonify({"message": error_message, "error": str(e)}), 500
 
         except Exception as e:
             db.session.rollback()
-            print(f"Unexpected error during office and room creation: {e}")
+            print(f"Unexpected error during office creation: {e}")
             return jsonify({"message": "An unexpected error occurred", "error": str(e)}), 500
+
 
 
 
