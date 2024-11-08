@@ -12,7 +12,7 @@ import os
 
 class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'your_secret_key'
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or 'mysql+pymysql://spaklean_noni2:xin.AD98oii@localhost/spaklean_spakleanappdb'
+    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or 'mysql+pymysql://spaklean_noni2:xin.AD98oii@198.57.242.9/spaklean_spakleanappdb'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     print("Connecting to database:", SQLALCHEMY_DATABASE_URI)
 
