@@ -7,12 +7,14 @@
 #     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
 
+# config.py
 import os
 
 class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'your_secret_key'
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or 'mysql+pymysql://spaklean_noni:@New12345-_<@localhost/spaklean_spakleanappdb'
+    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or 'mysql+pymysql://spaklean_noni2:xin.AD98oii@localhost/spaklean_spakleanappdb'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+
 
 
 
