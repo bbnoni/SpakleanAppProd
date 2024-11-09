@@ -18,6 +18,10 @@ class Config:
     print("Connecting to database:", SQLALCHEMY_DATABASE_URI)
 
 
+# I commented out posgres libraries at the requirements and updated the below config.py. 
+# I also added the render IP or domain on cpanel    
+
+
 
 
 
