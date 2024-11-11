@@ -426,17 +426,17 @@ def create_app():
                     done_on_behalf_of_user_id = room.user_id
 
                 # Create notification if task is done on behalf of another user
-                if done_on_behalf_of_user_id:
+                if done_on_behalf_of_user_id and done_on_behalf_of_user_id != user_id:
                     on_behalf_user = User.query.get(done_on_behalf_of_user_id)
                     if on_behalf_user:
                         print(f"Creating notification for done_on_behalf_of_user_id: {done_on_behalf_of_user_id}")
                         try:
                             message = f"An inspection was completed on your behalf by user {user_id}."
                             notification = Notification(
-                                user_id=done_on_behalf_of_user_id,
+                                user_id=done_on_behalf_of_user_id,  # User on whose behalf it was done
                                 message=message,
-                                done_by_user_id=user_id,  # User who performed the task
-                                done_on_behalf_of_user_id=done_on_behalf_of_user_id  # User on whose behalf it was done
+                                done_by_user_id=user_id,           # User who performed the task
+                                done_on_behalf_of_user_id=done_on_behalf_of_user_id
                             )
                             db.session.add(notification)
                             db.session.commit()
@@ -469,8 +469,6 @@ def create_app():
             # Log any exceptions for debugging
             print(f"Error submitting task: {e}")
             return jsonify({"message": "Failed to submit task", "error": str(e)}), 500
-
-
 
 
 
