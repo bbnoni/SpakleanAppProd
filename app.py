@@ -1449,13 +1449,7 @@ def create_app():
     
 
     @app.route('/api/users/<int:user_id>/notifications', methods=['GET'])
-    @jwt_required()
     def get_notifications(user_id):
-        # Retrieve the logged-in user's identity
-        current_user_id = get_jwt_identity()
-        if current_user_id != user_id:
-            return jsonify({"message": "Unauthorized access"}), 403
-
         user = User.query.get(user_id)
         if not user:
             return jsonify({"message": "User not found"}), 404
@@ -1472,29 +1466,27 @@ def create_app():
                 "message": notification.message,
                 "timestamp": notification.timestamp.isoformat(),
                 "is_read": notification.is_read,
-                "done_by_user_id": notification.done_by_user_id,  # Make sure this field exists in the model
-                "done_on_behalf_of_user_id": notification.done_on_behalf_of_user_id  # Make sure this field exists in the model
+                "done_by_user_id": notification.done_by_user_id,
+                "done_on_behalf_of_user_id": notification.done_on_behalf_of_user_id
             }
             for notification in notifications
         ]
         return jsonify({"notifications": notifications_data}), 200
 
 
-
-
-
-
     @app.route('/api/users/<int:user_id>/notifications/mark_all_as_read', methods=['POST'])
-    @jwt_required()
     def mark_all_notifications_as_read(user_id):
         user = User.query.get(user_id)
         if not user:
             return jsonify({"message": "User not found"}), 404
 
-        # Mark all notifications for the user as read
-        Notification.query.filter_by(user_id=user_id, is_read=False).update({'is_read': True})
+        notifications = Notification.query.filter_by(user_id=user_id, is_read=False).all()
+        for notification in notifications:
+            notification.is_read = True
+
         db.session.commit()
         return jsonify({"message": "All notifications marked as read"}), 200
+
 
 
 
