@@ -376,7 +376,7 @@ def create_app():
             try:
                 facility_score = float(facility_score) if facility_score is not None else None
             except ValueError:
-                print("Invalid facility_score format. Must be a numeric value.")
+                print("Invalid facility_score format. Must be numeric.")
                 return jsonify({"message": "Invalid facility_score format. Must be numeric."}), 400
 
             # Ensure area_scores is valid JSON
@@ -406,8 +406,13 @@ def create_app():
                 db.session.commit()
                 print("Task submitted successfully.")  # Log successful task submission
 
+                # Determine done_on_behalf_of_user_id if it's missing
+                if not done_on_behalf_of_user_id:
+                    # Logic to assign done_on_behalf_of_user_id
+                    # This assumes that the task is being done on behalf of the room's assigned user
+                    done_on_behalf_of_user_id = room.user_id
+
                 # Create notification if task is done on behalf of another user
-                # Check if done_on_behalf_of_user_id is valid before creating notification
                 if done_on_behalf_of_user_id:
                     on_behalf_user = User.query.get(done_on_behalf_of_user_id)
                     if on_behalf_user:
@@ -428,7 +433,6 @@ def create_app():
                             print(f"Error creating notification: {e}")
                     else:
                         print(f"Invalid done_on_behalf_of_user_id: {done_on_behalf_of_user_id} - Notification not created.")
-
 
                 # After committing the new task, update the monthly score summary
                 update_monthly_score_summary(
@@ -452,8 +456,6 @@ def create_app():
             # Log any exceptions for debugging
             print(f"Error submitting task: {e}")
             return jsonify({"message": "Failed to submit task", "error": str(e)}), 500
-
-
 
 
 
