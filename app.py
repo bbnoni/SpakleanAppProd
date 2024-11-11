@@ -54,6 +54,7 @@ def create_app():
         #offices = db.relationship('Office', backref='user', lazy=True)
         offices = db.relationship('Office', secondary=user_office, back_populates='users')
         task_submissions = db.relationship('TaskSubmission', backref='user', lazy=True)
+        notifications = db.relationship('Notification', backref='user', lazy=True)
 
         def __repr__(self):
             return f"<User {self.username} - {self.first_name} {self.last_name}>"
@@ -131,6 +132,19 @@ def create_app():
 
         def __repr__(self):
             return f"<MonthlyScoreSummary Month={self.month} Year={self.year} Office={self.office_id} User={self.user_id}>"
+        
+
+    class Notification(db.Model):
+        id = db.Column(db.Integer, primary_key=True)
+        user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+        message = db.Column(db.String(256), nullable=False)
+        timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+        is_read = db.Column(db.Boolean, default=False, nullable=False)
+        done_by_user_id = db.Column(db.Integer, nullable=True)  # User who performed the task
+        done_on_behalf_of_user_id = db.Column(db.Integer, nullable=True)  # User on whose behalf it was done
+
+        def __repr__(self):
+            return f"<Notification for User {self.user_id}: {self.message}>"    
 
         
 
@@ -318,6 +332,7 @@ def create_app():
             area_scores = data.get('area_scores', {})
             zone_score = data.get('zone_score')  # Expecting a double precision value
             facility_score = data.get('facility_score')  # Expecting a double precision value
+            done_on_behalf_of_user_id = data.get('done_on_behalf_of_user_id')  # New field for on-behalf submissions
 
             # Check if required fields are present
             if not all([task_type, user_id, room_id, zone_name]):
@@ -336,7 +351,7 @@ def create_app():
             if not isinstance(area_scores, dict):
                 print("Invalid area_scores format. Must be a dictionary.")
                 return jsonify({"message": "Invalid area_scores format"}), 400
-            
+
             # Check each area score for valid float values
             try:
                 area_scores = {k: float(v) for k, v in area_scores.items()}
@@ -357,7 +372,7 @@ def create_app():
             except ValueError:
                 print("Invalid zone_score format. Must be a numeric value.")
                 return jsonify({"message": "Invalid zone_score format. Must be numeric."}), 400
-            
+
             try:
                 facility_score = float(facility_score) if facility_score is not None else None
             except ValueError:
@@ -391,6 +406,19 @@ def create_app():
                 db.session.commit()
                 print("Task submitted successfully.")  # Log successful task submission
 
+                # Create notification if task is done on behalf of another user
+                if done_on_behalf_of_user_id:
+                    message = f"An inspection was completed on your behalf by user {user_id}."
+                    notification = Notification(
+                        user_id=done_on_behalf_of_user_id,
+                        message=message,
+                        done_by_user_id=user_id,  # User who performed the task
+                        done_on_behalf_of_user_id=done_on_behalf_of_user_id  # User on whose behalf it was done
+                    )
+                    db.session.add(notification)
+                    db.session.commit()
+                    print(f"Notification created for user {done_on_behalf_of_user_id}")  # Log notification creation
+
                 # After committing the new task, update the monthly score summary
                 update_monthly_score_summary(
                     office_id=room.office_id,
@@ -401,6 +429,7 @@ def create_app():
                 )
 
                 return jsonify({"message": "Task submitted successfully", "task_id": new_task.id}), 201
+
             except Exception as db_error:
                 db.session.rollback()  # Rollback on error
                 print(f"Database error: {db_error}")
@@ -412,6 +441,8 @@ def create_app():
             # Log any exceptions for debugging
             print(f"Error submitting task: {e}")
             return jsonify({"message": "Failed to submit task", "error": str(e)}), 500
+
+
 
 
 
@@ -1415,6 +1446,49 @@ def create_app():
             users_data.append(user_data)
 
         return jsonify({"users": users_data}), 200
+    
+
+    @app.route('/api/users/<int:user_id>/notifications', methods=['GET'])
+    @jwt_required()
+    def get_notifications(user_id):
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({"message": "User not found"}), 404
+
+        only_unread = request.args.get('only_unread', 'false').lower() == 'true'
+        notifications_query = Notification.query.filter_by(user_id=user_id)
+        if only_unread:
+            notifications_query = notifications_query.filter_by(is_read=False)
+
+        notifications = notifications_query.order_by(Notification.timestamp.desc()).all()
+        notifications_data = [
+            {
+                "id": notification.id,
+                "message": notification.message,
+                "timestamp": notification.timestamp.isoformat(),
+                "is_read": notification.is_read,
+                "done_by_user_id": notification.done_by_user_id,  # Add user who performed the task
+                "done_on_behalf_of_user_id": notification.done_on_behalf_of_user_id  # Add user on whose behalf it was done
+            }
+            for notification in notifications
+        ]
+        return jsonify({"notifications": notifications_data}), 200
+
+
+
+
+
+    @app.route('/api/notifications/<int:notification_id>/read', methods=['PATCH'])
+    @jwt_required()
+    def mark_notification_as_read(notification_id):
+        notification = Notification.query.get(notification_id)
+        if not notification:
+            return jsonify({"message": "Notification not found"}), 404
+
+        notification.is_read = True
+        db.session.commit()
+        return jsonify({"message": "Notification marked as read"}), 200
+
 
 
         
