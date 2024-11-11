@@ -407,22 +407,28 @@ def create_app():
                 print("Task submitted successfully.")  # Log successful task submission
 
                 # Create notification if task is done on behalf of another user
+                # Check if done_on_behalf_of_user_id is valid before creating notification
                 if done_on_behalf_of_user_id:
-                    print(f"Creating notification for done_on_behalf_of_user_id: {done_on_behalf_of_user_id}")
-                    try:
-                        message = f"An inspection was completed on your behalf by user {user_id}."
-                        notification = Notification(
-                            user_id=done_on_behalf_of_user_id,
-                            message=message,
-                            done_by_user_id=user_id,  # User who performed the task
-                            done_on_behalf_of_user_id=done_on_behalf_of_user_id  # User on whose behalf it was done
-                        )
-                        db.session.add(notification)
-                        db.session.commit()
-                        print(f"Notification created for user {done_on_behalf_of_user_id}")  # Log for debugging
-                    except Exception as e:
-                        db.session.rollback()
-                        print(f"Error creating notification: {e}")
+                    on_behalf_user = User.query.get(done_on_behalf_of_user_id)
+                    if on_behalf_user:
+                        print(f"Creating notification for done_on_behalf_of_user_id: {done_on_behalf_of_user_id}")
+                        try:
+                            message = f"An inspection was completed on your behalf by user {user_id}."
+                            notification = Notification(
+                                user_id=done_on_behalf_of_user_id,
+                                message=message,
+                                done_by_user_id=user_id,  # User who performed the task
+                                done_on_behalf_of_user_id=done_on_behalf_of_user_id  # User on whose behalf it was done
+                            )
+                            db.session.add(notification)
+                            db.session.commit()
+                            print(f"Notification created for user {done_on_behalf_of_user_id}")  # Log for debugging
+                        except Exception as e:
+                            db.session.rollback()
+                            print(f"Error creating notification: {e}")
+                    else:
+                        print(f"Invalid done_on_behalf_of_user_id: {done_on_behalf_of_user_id} - Notification not created.")
+
 
                 # After committing the new task, update the monthly score summary
                 update_monthly_score_summary(
