@@ -1498,12 +1498,23 @@ def create_app():
 
         db.session.commit()
         return jsonify({"message": "All notifications marked as read"}), 200
+    
 
+    @app.route('/api/users/<int:user_id>/details', methods=['GET'])
+    def get_user_details(user_id):
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({"message": "User not found"}), 404
 
+        user_data = {
+            'id': user.id,
+            'first_name': user.first_name,
+            'middle_name': user.middle_name,
+            'last_name': user.last_name,
+            'email': user.username  # Assuming username is the email
+        }
+        return jsonify(user_data), 200
 
-
-
-        
 
 
 
