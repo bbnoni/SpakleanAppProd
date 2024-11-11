@@ -327,24 +327,24 @@ def create_app():
             task_type = data.get('task_type')
             latitude = data.get('latitude')
             longitude = data.get('longitude')
-            user_id = int(data.get('user_id'))  # Ensure user_id is an integer
+            done_by_user_id = int(data.get('done_by_user_id'))  # ID of the logged-in user
+            done_on_behalf_of_user_id = int(data.get('done_on_behalf_of_user_id'))  # User ID for the on-behalf user
             room_id = int(data.get('room_id'))  # Ensure room_id is an integer
             area_scores = data.get('area_scores', {})
             zone_score = data.get('zone_score')  # Expecting a double precision value
             facility_score = data.get('facility_score')  # Expecting a double precision value
-            done_on_behalf_of_user_id = data.get('done_on_behalf_of_user_id')  # New field for on-behalf submissions
 
             # Check if required fields are present
-            if not all([task_type, user_id, room_id, zone_name]):
+            if not all([task_type, done_by_user_id, room_id, zone_name]):
                 print("Missing required fields.")  # Log missing fields
                 return jsonify({"message": "Missing required fields"}), 400
 
             # Fetch user and room information from the database
-            user = User.query.get(user_id)
+            user = User.query.get(done_by_user_id)
             room = Room.query.get(room_id)
 
             if not user or not room:
-                print(f"User or Room not found: user_id={user_id}, room_id={room_id}")  # Log missing user/room
+                print(f"User or Room not found: done_by_user_id={done_by_user_id}, room_id={room_id}")
                 return jsonify({"message": "User or Room not found"}), 404
 
             # Validate area_scores
@@ -391,7 +391,7 @@ def create_app():
                 task_type=task_type,
                 latitude=latitude,
                 longitude=longitude,
-                user_id=user.id,
+                user_id=done_by_user_id,  # User performing the task
                 room_id=room.id,
                 room_score=room_score,
                 area_scores=area_scores_json,  # Store the area scores as JSON
@@ -406,23 +406,17 @@ def create_app():
                 db.session.commit()
                 print("Task submitted successfully.")  # Log successful task submission
 
-                # Determine done_on_behalf_of_user_id if it's missing
-                if not done_on_behalf_of_user_id:
-                    # Logic to assign done_on_behalf_of_user_id
-                    # This assumes that the task is being done on behalf of the room's assigned user
-                    done_on_behalf_of_user_id = room.user_id
-
                 # Create notification if task is done on behalf of another user
                 if done_on_behalf_of_user_id:
                     on_behalf_user = User.query.get(done_on_behalf_of_user_id)
                     if on_behalf_user:
                         print(f"Creating notification for done_on_behalf_of_user_id: {done_on_behalf_of_user_id}")
                         try:
-                            message = f"An inspection was completed on your behalf by user {user_id}."
+                            message = f"An inspection was completed on your behalf by user {done_by_user_id}."
                             notification = Notification(
                                 user_id=done_on_behalf_of_user_id,
                                 message=message,
-                                done_by_user_id=user_id,  # User who performed the task
+                                done_by_user_id=done_by_user_id,  # User who performed the task
                                 done_on_behalf_of_user_id=done_on_behalf_of_user_id  # User on whose behalf it was done
                             )
                             db.session.add(notification)
@@ -437,7 +431,7 @@ def create_app():
                 # After committing the new task, update the monthly score summary
                 update_monthly_score_summary(
                     office_id=room.office_id,
-                    user_id=user.id,
+                    user_id=done_by_user_id,
                     zone_name=zone_name,
                     year=new_task.date_submitted.year,
                     month=new_task.date_submitted.month
@@ -456,6 +450,7 @@ def create_app():
             # Log any exceptions for debugging
             print(f"Error submitting task: {e}")
             return jsonify({"message": "Failed to submit task", "error": str(e)}), 500
+
 
 
 
