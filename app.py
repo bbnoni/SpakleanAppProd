@@ -314,8 +314,6 @@ def create_app():
 
     from sqlalchemy import func, extract  # Import necessary SQLAlchemy functions
 
-    from flask import Flask, request, jsonify
-
 
 
 
