@@ -1387,6 +1387,32 @@ def create_app():
 
         db.session.commit()
 
+
+    @app.route('/api/admin/users', methods=['GET'])
+    @jwt_required()
+    def get_users():
+        current_user = get_jwt_identity()
+        role = current_user['role']
+
+        # Only allow access for Admin, Custodial Manager, and Facility Executive
+        if role not in ['Admin', 'Custodial Manager', 'Facility Executive']:
+            return jsonify({"message": "Unauthorized access"}), 403
+
+        try:
+            # Fetch users based on role - adjust filtering logic as needed
+            if role == 'Custodial Manager' or role == 'Facility Executive':
+                # Example: Only fetch users in the same sector or office
+                users = User.query.filter_by(sector=current_user['sector']).all()
+            else:
+                # Admins can view all users
+                users = User.query.all()
+
+            users_data = [{'id': user.id, 'username': user.username, 'role': user.role} for user in users]
+            return jsonify({"users": users_data}), 200
+        except Exception as e:
+            return jsonify({"message": f"An error occurred while fetching users: {str(e)}"}), 500
+        
+
         
 
 
