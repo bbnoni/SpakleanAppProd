@@ -314,6 +314,11 @@ def create_app():
 
     from sqlalchemy import func, extract  # Import necessary SQLAlchemy functions
 
+    from flask import Flask, request, jsonify
+
+
+
+
     @app.route('/api/tasks/submit', methods=['POST'])
     def submit_task():
         data = request.get_json()
@@ -321,43 +326,35 @@ def create_app():
 
         try:
             # Decode zone_name if it's URL-encoded
-            zone_name = unquote(data.get('zone_name'))
-            print(f"Decoded zone_name: {zone_name}")  # Log decoded zone_name
+            zone_name = unquote(data.get('zone_name', ''))
+            print(f"Decoded zone_name: {zone_name}")
 
-            # Extract and validate fields, logging each one for debugging
+            # Extract and validate fields
             task_type = data.get('task_type')
             latitude = data.get('latitude')
             longitude = data.get('longitude')
-
-            # Validate that user_id and room_id are provided and are valid integers
             user_id = data.get('user_id')
-            if user_id is None:
-                print("Error: user_id is missing or None")
-                return jsonify({"message": "user_id is required"}), 400
-            user_id = int(user_id)  # Convert user_id to integer
-
             room_id = data.get('room_id')
-            if room_id is None:
-                print("Error: room_id is missing or None")
-                return jsonify({"message": "room_id is required"}), 400
-            room_id = int(room_id)  # Convert room_id to integer
-
             area_scores = data.get('area_scores', {})
-            zone_score = data.get('zone_score')  # Expecting a double precision value
-            facility_score = data.get('facility_score')  # Expecting a double precision value
-            done_on_behalf_of_user_id = data.get('done_on_behalf_of_user_id')  # New field for on-behalf submissions
+            zone_score = data.get('zone_score')
+            facility_score = data.get('facility_score')
+            done_by_user_id = data.get('done_by_user_id')  # User performing the task
+            done_on_behalf_of_user_id = data.get('done_on_behalf_of_user_id')  # Task done on behalf of this user
 
-            # Check if required fields are present
-            if not all([task_type, zone_name]):
-                print("Missing required fields: task_type or zone_name.")  # Log missing fields
+            # Check that mandatory fields are present
+            if not all([task_type, zone_name, user_id, room_id]):
+                print("Missing required fields.")
                 return jsonify({"message": "Missing required fields"}), 400
 
-            # Fetch user and room information from the database
+            user_id = int(user_id)
+            room_id = int(room_id)
+
+            # Fetch user and room details
             user = User.query.get(user_id)
             room = Room.query.get(room_id)
 
             if not user or not room:
-                print(f"User or Room not found: user_id={user_id}, room_id={room_id}")  # Log missing user/room
+                print(f"User or Room not found: user_id={user_id}, room_id={room_id}")
                 return jsonify({"message": "User or Room not found"}), 404
 
             # Validate area_scores
@@ -365,25 +362,22 @@ def create_app():
                 print("Invalid area_scores format. Must be a dictionary.")
                 return jsonify({"message": "Invalid area_scores format"}), 400
 
-            # Check each area score for valid float values
+            # Validate area_scores values as float
             try:
                 area_scores = {k: float(v) for k, v in area_scores.items()}
             except ValueError:
                 print("Invalid value in area_scores. Must be numeric.")
                 return jsonify({"message": "Invalid value in area_scores. Must be numeric."}), 400
 
-            # Calculate room score from area scores
-            if area_scores:
-                room_score = sum(area_scores.values()) / len(area_scores)
-            else:
-                room_score = 0.0  # Default value if no area scores
-            print(f"Calculated room_score: {room_score}")  # Log room score
+            # Calculate room score from area_scores
+            room_score = sum(area_scores.values()) / len(area_scores) if area_scores else 0.0
+            print(f"Calculated room_score: {room_score}")
 
             # Convert zone_score and facility_score to floats if provided
             try:
                 zone_score = float(zone_score) if zone_score is not None else None
             except ValueError:
-                print("Invalid zone_score format. Must be a numeric value.")
+                print("Invalid zone_score format. Must be numeric.")
                 return jsonify({"message": "Invalid zone_score format. Must be numeric."}), 400
 
             try:
@@ -392,55 +386,53 @@ def create_app():
                 print("Invalid facility_score format. Must be numeric.")
                 return jsonify({"message": "Invalid facility_score format. Must be numeric."}), 400
 
-            # Ensure area_scores is valid JSON
+            # Convert area_scores to JSON
             try:
                 area_scores_json = json.dumps(area_scores)
             except Exception as e:
-                print(f"Error converting area_scores to JSON: {e}")  # Log JSON conversion error
+                print(f"Error converting area_scores to JSON: {e}")
                 return jsonify({"message": "Invalid area_scores format"}), 400
 
-            # Save the task submission to the database
+            # Create a new task submission entry
             new_task = TaskSubmission(
                 task_type=task_type,
                 latitude=latitude,
                 longitude=longitude,
-                user_id=user.id,
-                room_id=room.id,
+                user_id=user_id,
+                room_id=room_id,
                 room_score=room_score,
-                area_scores=area_scores_json,  # Store the area scores as JSON
+                area_scores=area_scores_json,
                 zone_name=zone_name,
-                zone_score=zone_score,  # Should be a double or None
-                facility_score=facility_score  # Should be a double or None
+                zone_score=zone_score,
+                facility_score=facility_score
             )
 
-            # Use a try-except-finally block for database transactions
+            # Save task submission to the database
             try:
                 db.session.add(new_task)
                 db.session.commit()
-                print("Task submitted successfully.")  # Log successful task submission
+                print("Task submitted successfully.")
 
-                # Determine done_on_behalf_of_user_id if it's missing
+                # Determine `done_on_behalf_of_user_id` if missing
                 if not done_on_behalf_of_user_id:
-                    # Logic to assign done_on_behalf_of_user_id
-                    # This assumes that the task is being done on behalf of the room's assigned user
                     done_on_behalf_of_user_id = room.user_id
 
-                # Create notification if task is done on behalf of another user
-                if done_on_behalf_of_user_id and done_on_behalf_of_user_id != user_id:
+                # Create a notification if task is done on behalf of another user
+                if done_on_behalf_of_user_id and done_on_behalf_of_user_id != done_by_user_id:
                     on_behalf_user = User.query.get(done_on_behalf_of_user_id)
                     if on_behalf_user:
                         print(f"Creating notification for done_on_behalf_of_user_id: {done_on_behalf_of_user_id}")
                         try:
-                            message = f"An inspection was completed on your behalf by user {user_id}."
+                            message = f"An inspection was completed on your behalf by user {done_by_user_id}."
                             notification = Notification(
-                                user_id=done_on_behalf_of_user_id,  # User on whose behalf it was done
+                                user_id=done_on_behalf_of_user_id,
                                 message=message,
-                                done_by_user_id=user_id,           # User who performed the task
+                                done_by_user_id=done_by_user_id,
                                 done_on_behalf_of_user_id=done_on_behalf_of_user_id
                             )
                             db.session.add(notification)
                             db.session.commit()
-                            print(f"Notification created for user {done_on_behalf_of_user_id}")  # Log for debugging
+                            print(f"Notification created for user {done_on_behalf_of_user_id}")
                         except Exception as e:
                             db.session.rollback()
                             print(f"Error creating notification: {e}")
@@ -459,16 +451,16 @@ def create_app():
                 return jsonify({"message": "Task submitted successfully", "task_id": new_task.id}), 201
 
             except Exception as db_error:
-                db.session.rollback()  # Rollback on error
+                db.session.rollback()
                 print(f"Database error: {db_error}")
                 return jsonify({"message": "Failed to submit task", "error": str(db_error)}), 500
             finally:
-                db.session.close()  # Ensure session is closed
+                db.session.close()
 
         except Exception as e:
-            # Log any exceptions for debugging
             print(f"Error submitting task: {e}")
             return jsonify({"message": "Failed to submit task", "error": str(e)}), 500
+
 
 
 
