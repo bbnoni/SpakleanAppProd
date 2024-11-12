@@ -1515,6 +1515,25 @@ def create_app():
         db.session.commit()
         return jsonify({"message": "All notifications marked as read"}), 200
     
+    @app.route('/api/users/<int:user_id>/notifications/<int:notification_id>/mark_as_read', methods=['POST'])
+    def mark_notification_as_read(user_id, notification_id):
+        # Check if user exists
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({"message": "User not found"}), 404
+
+        # Find the specific notification for the user
+        notification = Notification.query.filter_by(id=notification_id, user_id=user_id).first()
+        if not notification:
+            return jsonify({"message": "Notification not found"}), 404
+
+        # Update the notification's read status
+        notification.is_read = True
+        db.session.commit()
+
+        return jsonify({"message": "Notification marked as read"}), 200
+
+    
 
     @app.route('/api/users/<int:user_id>/details', methods=['GET'])
     def get_user_details(user_id):
