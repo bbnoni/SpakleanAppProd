@@ -332,6 +332,25 @@ def create_app():
             latitude = data.get('latitude')
             longitude = data.get('longitude')
 
+            # Extract and log done_by_user_id and done_on_behalf_of_user_id
+            done_by_user_id = data.get('done_by_user_id')
+            done_on_behalf_of_user_id = data.get('done_on_behalf_of_user_id')
+            
+            # Fetch the users from the database for role verification
+            done_by_user = User.query.get(done_by_user_id)
+            on_behalf_user = User.query.get(done_on_behalf_of_user_id) if done_on_behalf_of_user_id else None
+
+            # Log user roles and IDs
+            if done_by_user:
+                print(f"Task submitted by User ID={done_by_user_id}, Role={done_by_user.role}")
+            if on_behalf_user:
+                print(f"Task done on behalf of User ID={done_on_behalf_of_user_id}, Role={on_behalf_user.role}")
+
+            # Check if the `done_by_user` has permission to do inspections on behalf of others
+            if done_by_user.role not in ['Facility Executive', 'Custodial Manager']:
+                print(f"User {done_by_user_id} ({done_by_user.role}) does NOT have permission to submit tasks on behalf of others.")
+                return jsonify({"message": "Permission denied"}), 403
+
             # Validate that user_id and room_id are provided and are valid integers
             user_id = data.get('user_id')
             if user_id is None:
@@ -348,7 +367,6 @@ def create_app():
             area_scores = data.get('area_scores', {})
             zone_score = data.get('zone_score')
             facility_score = data.get('facility_score')
-            done_on_behalf_of_user_id = data.get('done_on_behalf_of_user_id')
 
             # Check if required fields are present
             if not all([task_type, zone_name]):
@@ -422,7 +440,7 @@ def create_app():
                 db.session.commit()
                 print("Task submitted successfully.")
 
-                # Assign done_on_behalf_of_user_id to the intended user
+                # Assign done_on_behalf_of_user_id to the intended user if missing
                 if not done_on_behalf_of_user_id:
                     done_on_behalf_of_user_id = room.user_id
 
@@ -469,6 +487,7 @@ def create_app():
         except Exception as e:
             print(f"Error submitting task: {e}")
             return jsonify({"message": "Failed to submit task", "error": str(e)}), 500
+
 
 
 
