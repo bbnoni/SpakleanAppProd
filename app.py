@@ -248,26 +248,37 @@ def create_app():
     @app.route('/api/auth/login', methods=['POST'])
     def login():
         data = request.get_json()
-        username = data['username'].strip().lower()  # Ensure lowercase for comparison
+        username = data['username'].strip().lower()  # Convert to lowercase
         password = data['password']
 
-        # Perform a case-insensitive query by converting both to lowercase
+        print(f"Attempting login for username: {username}")
+
+        # Case-insensitive username check
         user = User.query.filter(db.func.lower(User.username) == username).first()
 
-        if user and bcrypt.check_password_hash(user.password_hash, password):
-            access_token = create_access_token(identity={'username': user.username, 'role': user.role})
-            
-            # Check if user needs to change password (example: admin-created users)
-            password_change_required = user.password_change_required
+        if user:
+            print(f"User found: {user.username}")
+            # Check password hash
+            if bcrypt.check_password_hash(user.password_hash, password):
+                print("Password match found.")
+                access_token = create_access_token(identity={'username': user.username, 'role': user.role})
+                password_change_required = user.password_change_required
 
-            return jsonify({
-                'access_token': access_token,
-                'role': user.role,
-                'user_id': user.id,
-                'password_change_required': password_change_required  # Include this in response
-            }), 200
+                return jsonify({
+                    'access_token': access_token,
+                    'role': user.role,
+                    'user_id': user.id,
+                    'password_change_required': password_change_required
+                }), 200
+            else:
+                print("Password did not match.")
+        else:
+            print("User not found.")
 
+        print("Invalid credentials.")
         return jsonify({"message": "Invalid credentials"}), 401
+
+        
 
 
 
