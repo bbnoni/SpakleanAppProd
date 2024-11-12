@@ -15,6 +15,8 @@ class Config:
     #SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or 'mysql+pymysql://spaklean_noni2:xin.AD98oii@198.57.242.9/spaklean_spakleanappdb'
     SQLALCHEMY_DATABASE_URI = 'mysql+pymysql://spaklean_noni2:xin.AD98oii@198.57.242.9/spaklean_spakleanappdb'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    SQLALCHEMY_ECHO = True
+
     print("Connecting to database:", SQLALCHEMY_DATABASE_URI)
 
 
