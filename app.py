@@ -248,10 +248,11 @@ def create_app():
     @app.route('/api/auth/login', methods=['POST'])
     def login():
         data = request.get_json()
-        username = data['username']
+        username = data['username'].strip().lower()  # Ensure lowercase for comparison
         password = data['password']
 
-        user = User.query.filter_by(username=username).first()
+        # Perform a case-insensitive query by converting both to lowercase
+        user = User.query.filter(db.func.lower(User.username) == username).first()
 
         if user and bcrypt.check_password_hash(user.password_hash, password):
             access_token = create_access_token(identity={'username': user.username, 'role': user.role})
@@ -267,6 +268,7 @@ def create_app():
             }), 200
 
         return jsonify({"message": "Invalid credentials"}), 401
+
 
 
     @app.route('/api/admin/create_office', methods=['POST'])
