@@ -31,3 +31,17 @@ try:
 except Exception as e:
     print("Connection failed:", e)
 
+
+# from sqlalchemy import create_engine
+
+# # Use 'mysql+mysqldb://' as the dialect with mysqlclient
+# db_uri = 'mysql+mysqldb://spaklean_noni2:xin.AD98oii@198.57.242.9/spaklean_spakleanappdb'
+# engine = create_engine(db_uri)
+
+# try:
+#     with engine.connect() as connection:
+#         print("Connection successful.")
+# except Exception as e:
+#     print("Connection failed:", e)
+
+
