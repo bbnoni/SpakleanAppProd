@@ -257,8 +257,8 @@ def create_app():
         all_users = User.query.all()
         print("Current users in database:", [(u.username, u.id) for u in all_users])
 
-        # Perform a case-insensitive lookup
-        user = User.query.filter(db.func.lower(User.username) == db.func.lower(username)).first()
+        # Perform a case-insensitive, whitespace-trimmed lookup
+        user = User.query.filter(db.func.lower(db.func.trim(User.username)) == db.func.lower(username)).first()
         
         if user:
             print("User found:", user.username)
@@ -277,6 +277,7 @@ def create_app():
         else:
             print("User not found.")
             return jsonify({"message": "Invalid credentials"}), 401
+
 
 
         
