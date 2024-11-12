@@ -1478,28 +1478,36 @@ def create_app():
 
     @app.route('/api/users/<int:user_id>/notifications', methods=['GET'])
     def get_notifications(user_id):
+        # Fetch the user to confirm existence
         user = User.query.get(user_id)
         if not user:
             return jsonify({"message": "User not found"}), 404
 
+        # Check if the client only wants unread notifications
         only_unread = request.args.get('only_unread', 'false').lower() == 'true'
+        
+        # Prepare the query for notifications based on read/unread status
         notifications_query = Notification.query.filter_by(user_id=user_id)
         if only_unread:
             notifications_query = notifications_query.filter_by(is_read=False)
 
+        # Retrieve notifications, ensuring they are ordered by the latest timestamp
         notifications = notifications_query.order_by(Notification.timestamp.desc()).all()
+        
+        # Serialize notifications, including the is_read status
         notifications_data = [
             {
                 "id": notification.id,
                 "message": notification.message,
                 "timestamp": notification.timestamp.isoformat(),
-                "is_read": notification.is_read,
+                "is_read": notification.is_read,  # Ensure this reflects the actual read status
                 "done_by_user_id": notification.done_by_user_id,
                 "done_on_behalf_of_user_id": notification.done_on_behalf_of_user_id
             }
             for notification in notifications
         ]
         return jsonify({"notifications": notifications_data}), 200
+
 
 
     @app.route('/api/users/<int:user_id>/notifications/mark_all_as_read', methods=['POST'])
