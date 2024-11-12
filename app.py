@@ -1510,6 +1510,7 @@ def create_app():
 
 
 
+
     @app.route('/api/users/<int:user_id>/notifications/mark_all_as_read', methods=['POST'])
     def mark_all_notifications_as_read(user_id):
         user = User.query.get(user_id)
