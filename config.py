@@ -18,6 +18,15 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ECHO = True
 
+    # Add connection pool settings here
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        "pool_pre_ping": True,
+        "pool_recycle": 280,
+        "pool_timeout": 30,
+        "pool_size": 10,
+        "max_overflow": 20
+    }
+
     print("Connecting to database:", SQLALCHEMY_DATABASE_URI)
 
 
