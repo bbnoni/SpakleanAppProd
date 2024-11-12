@@ -248,22 +248,23 @@ def create_app():
     @app.route('/api/auth/login', methods=['POST'])
     def login():
         data = request.get_json()
-        username = data['username'].strip().lower()  # Convert to lowercase
+        username = data['username'].strip()
         password = data['password']
-
+        
         print(f"Attempting login for username: {username}")
 
-        # Case-insensitive username check
-        user = User.query.filter(db.func.lower(User.username) == username).first()
+        # Print all users in the database for verification
+        all_users = User.query.all()
+        print("Current users in database:", [(u.username, u.id) for u in all_users])
 
+        # Perform a case-insensitive lookup
+        user = User.query.filter(db.func.lower(User.username) == db.func.lower(username)).first()
+        
         if user:
-            print(f"User found: {user.username}")
-            # Check password hash
+            print("User found:", user.username)
             if bcrypt.check_password_hash(user.password_hash, password):
-                print("Password match found.")
                 access_token = create_access_token(identity={'username': user.username, 'role': user.role})
                 password_change_required = user.password_change_required
-
                 return jsonify({
                     'access_token': access_token,
                     'role': user.role,
@@ -271,12 +272,12 @@ def create_app():
                     'password_change_required': password_change_required
                 }), 200
             else:
-                print("Password did not match.")
+                print("Password mismatch.")
+                return jsonify({"message": "Invalid credentials"}), 401
         else:
             print("User not found.")
+            return jsonify({"message": "Invalid credentials"}), 401
 
-        print("Invalid credentials.")
-        return jsonify({"message": "Invalid credentials"}), 401
 
         
 
