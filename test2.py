@@ -22,7 +22,7 @@
 from sqlalchemy import create_engine
 
 # Confirming the connection URL is correct
-db_uri = 'mysql+pymysql://spaklean_noni2:xin.AD98oii@198.57.242.9/spaklean_spakleanappdb'
+db_uri = 'mysql+pymysql://spaklean_noni2:xin%2EAD98oii%40@198.57.242.9/spaklean_spakleanappdb'
 engine = create_engine(db_uri)
 
 try:
