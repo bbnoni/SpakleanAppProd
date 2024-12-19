@@ -1,0 +1,5 @@
+
+
+LOAD DATABASE
+FROM mysql://spaklean_noni2:xin%2EAD98oii@198.57.242.9/spaklean_spakleanappdb
+INTO "mysql://spaklean_noni2:xin%2EAD98oii@198.57.242.9/spaklean_spakleanappdb";

@@ -145,6 +145,47 @@ def create_app():
 
         def __repr__(self):
             return f"<Notification for User {self.user_id}: {self.message}>"    
+        
+    class Location(db.Model):
+        id = db.Column(db.Integer, primary_key=True)
+        name = db.Column(db.String(120), nullable=False, unique=True)
+        sectors = db.relationship('Sector', backref='location', lazy=True)
+
+        def __repr__(self):
+            return f"<Location {self.name}>"
+        
+
+    class Sector(db.Model):
+        id = db.Column(db.Integer, primary_key=True)
+        name = db.Column(db.String(120), nullable=False)
+        location_id = db.Column(db.Integer, db.ForeignKey('location.id'), nullable=False)
+        customers = db.relationship('Customer', backref='sector', lazy=True)
+
+        def __repr__(self):
+            return f"<Sector {self.name} in Location {self.location_id}>"
+        
+
+    class Customer(db.Model):
+        id = db.Column(db.Integer, primary_key=True)
+        name = db.Column(db.String(120), nullable=False)
+        sector_id = db.Column(db.Integer, db.ForeignKey('sector.id'), nullable=False)
+        buildings = db.relationship('Building', backref='customer', lazy=True)
+
+        def __repr__(self):
+            return f"<Customer {self.name} in Sector {self.sector_id}>"
+        
+
+    class Building(db.Model):
+        id = db.Column(db.Integer, primary_key=True)
+        name = db.Column(db.String(120), nullable=False)
+        customer_id = db.Column(db.Integer, db.ForeignKey('customer.id'), nullable=False)
+
+        def __repr__(self):
+            return f"<Building {self.name} for Customer {self.customer_id}>"
+        
+    
+    
+    
 
         
 
@@ -1573,6 +1614,123 @@ def create_app():
             'email': user.username  # Assuming username is the email
         }
         return jsonify(user_data), 200
+    
+
+
+    #####----NEW REVISION------####
+
+        # Location Routes
+    @app.route('/api/admin/locations', methods=['POST'])
+    def create_location():
+        data = request.get_json()
+        name = data.get('name')
+
+        if not name:
+            return jsonify({"message": "Location name is required"}), 400
+
+        existing_location = Location.query.filter_by(name=name).first()
+        if existing_location:
+            return jsonify({"message": f"Location '{name}' already exists"}), 409
+
+        new_location = Location(name=name)
+        db.session.add(new_location)
+        db.session.commit()
+
+        return jsonify({"message": f"Location '{name}' created successfully", "id": new_location.id}), 201
+
+    @app.route('/api/admin/locations', methods=['GET'])
+    def get_all_locations():
+        locations = Location.query.all()
+        return jsonify([{"id": loc.id, "name": loc.name} for loc in locations]), 200
+
+    # Sector Routes
+    @app.route('/api/admin/sectors', methods=['POST'])
+    def create_sector():
+        data = request.get_json()
+        name = data.get('name')
+        location_id = data.get('location_id')
+
+        if not all([name, location_id]):
+            return jsonify({"message": "Sector name and location ID are required"}), 400
+
+        location = Location.query.get(location_id)
+        if not location:
+            return jsonify({"message": "Location not found"}), 404
+
+        new_sector = Sector(name=name, location_id=location_id)
+        db.session.add(new_sector)
+        db.session.commit()
+
+        return jsonify({"message": f"Sector '{name}' created successfully", "id": new_sector.id}), 201
+
+    @app.route('/api/admin/sectors/<int:location_id>', methods=['GET'])
+    def get_sectors_by_location(location_id):
+        location = Location.query.get(location_id)
+        if not location:
+            return jsonify({"message": "Location not found"}), 404
+
+        sectors = Sector.query.filter_by(location_id=location_id).all()
+        return jsonify([{"id": sec.id, "name": sec.name} for sec in sectors]), 200
+
+    # Customer Routes
+    @app.route('/api/admin/customers', methods=['POST'])
+    def create_customer():
+        data = request.get_json()
+        name = data.get('name')
+        sector_id = data.get('sector_id')
+
+        if not all([name, sector_id]):
+            return jsonify({"message": "Customer name and sector ID are required"}), 400
+
+        sector = Sector.query.get(sector_id)
+        if not sector:
+            return jsonify({"message": "Sector not found"}), 404
+
+        new_customer = Customer(name=name, sector_id=sector_id)
+        db.session.add(new_customer)
+        db.session.commit()
+
+        return jsonify({"message": f"Customer '{name}' created successfully", "id": new_customer.id}), 201
+
+    @app.route('/api/admin/customers/<int:sector_id>', methods=['GET'])
+    def get_customers_by_sector(sector_id):
+        sector = Sector.query.get(sector_id)
+        if not sector:
+            return jsonify({"message": "Sector not found"}), 404
+
+        customers = Customer.query.filter_by(sector_id=sector_id).all()
+        return jsonify([{"id": cust.id, "name": cust.name} for cust in customers]), 200
+
+    # Building Routes
+    @app.route('/api/admin/buildings', methods=['POST'])
+    def create_building():
+        data = request.get_json()
+        name = data.get('name')
+        customer_id = data.get('customer_id')
+
+        if not all([name, customer_id]):
+            return jsonify({"message": "Building name and customer ID are required"}), 400
+
+        customer = Customer.query.get(customer_id)
+        if not customer:
+            return jsonify({"message": "Customer not found"}), 404
+
+        new_building = Building(name=name, customer_id=customer_id)
+        db.session.add(new_building)
+        db.session.commit()
+
+        return jsonify({"message": f"Building '{name}' created successfully", "id": new_building.id}), 201
+
+    @app.route('/api/admin/buildings/<int:customer_id>', methods=['GET'])
+    def get_buildings_by_customer(customer_id):
+        customer = Customer.query.get(customer_id)
+        if not customer:
+            return jsonify({"message": "Customer not found"}), 404
+
+        buildings = Building.query.filter_by(customer_id=customer_id).all()
+        return jsonify([{"id": bld.id, "name": bld.name} for bld in buildings]), 200
+
+
 
 
 
