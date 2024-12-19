@@ -183,6 +183,17 @@ def create_app():
         def __repr__(self):
             return f"<Building {self.name} for Customer {self.customer_id}>"
         
+
+
+    class UserLocation(db.Model):
+        id = db.Column(db.Integer, primary_key=True)
+        user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+        location_id = db.Column(db.Integer, db.ForeignKey('location.id'), nullable=False)
+
+        user = db.relationship('User', backref='user_locations')
+        location = db.relationship('Location', backref='user_locations')
+    
+        
     
     
     
@@ -1638,10 +1649,12 @@ def create_app():
 
         return jsonify({"message": f"Location '{name}' created successfully", "id": new_location.id}), 201
 
+
     @app.route('/api/admin/locations', methods=['GET'])
     def get_all_locations():
         locations = Location.query.all()
         return jsonify([{"id": loc.id, "name": loc.name} for loc in locations]), 200
+
 
     # Sector Routes
     @app.route('/api/admin/sectors', methods=['POST'])
@@ -1663,6 +1676,7 @@ def create_app():
 
         return jsonify({"message": f"Sector '{name}' created successfully", "id": new_sector.id}), 201
 
+
     @app.route('/api/admin/sectors/<int:location_id>', methods=['GET'])
     def get_sectors_by_location(location_id):
         location = Location.query.get(location_id)
@@ -1671,6 +1685,7 @@ def create_app():
 
         sectors = Sector.query.filter_by(location_id=location_id).all()
         return jsonify([{"id": sec.id, "name": sec.name} for sec in sectors]), 200
+
 
     # Customer Routes
     @app.route('/api/admin/customers', methods=['POST'])
@@ -1692,6 +1707,7 @@ def create_app():
 
         return jsonify({"message": f"Customer '{name}' created successfully", "id": new_customer.id}), 201
 
+
     @app.route('/api/admin/customers/<int:sector_id>', methods=['GET'])
     def get_customers_by_sector(sector_id):
         sector = Sector.query.get(sector_id)
@@ -1700,6 +1716,7 @@ def create_app():
 
         customers = Customer.query.filter_by(sector_id=sector_id).all()
         return jsonify([{"id": cust.id, "name": cust.name} for cust in customers]), 200
+
 
     # Building Routes
     @app.route('/api/admin/buildings', methods=['POST'])
@@ -1721,6 +1738,7 @@ def create_app():
 
         return jsonify({"message": f"Building '{name}' created successfully", "id": new_building.id}), 201
 
+
     @app.route('/api/admin/buildings/<int:customer_id>', methods=['GET'])
     def get_buildings_by_customer(customer_id):
         customer = Customer.query.get(customer_id)
@@ -1729,6 +1747,7 @@ def create_app():
 
         buildings = Building.query.filter_by(customer_id=customer_id).all()
         return jsonify([{"id": bld.id, "name": bld.name} for bld in buildings]), 200
+
 
 
 
