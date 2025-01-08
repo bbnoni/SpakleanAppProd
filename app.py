@@ -1747,6 +1747,32 @@ def create_app():
 
         buildings = Building.query.filter_by(customer_id=customer_id).all()
         return jsonify([{"id": bld.id, "name": bld.name} for bld in buildings]), 200
+    
+
+
+    @app.route('/api/users/<int:user_id>/locations', methods=['GET'])
+    def get_user_locations(user_id):
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({"message": "User not found"}), 404
+
+        # Assuming 'UserLocation' links users and locations
+        user_locations = UserLocation.query.filter_by(user_id=user_id).all()
+
+        if not user_locations:
+            return jsonify({"message": "No locations assigned for this user"}), 200
+
+        # Return the list of locations associated with the user
+        locations_data = [
+            {
+                "id": loc.location.id,
+                "name": loc.location.name
+            }
+            for loc in user_locations
+        ]
+
+        return jsonify({"locations": locations_data}), 200
+
 
 
 
