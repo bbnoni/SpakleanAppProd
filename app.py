@@ -1715,7 +1715,11 @@ def create_app():
             return jsonify({"message": "Sector not found"}), 404
 
         customers = Customer.query.filter_by(sector_id=sector_id).all()
-        return jsonify([{"id": cust.id, "name": cust.name} for cust in customers]), 200
+        if not customers:
+            return jsonify({"message": "No customers found"}), 200
+
+        return jsonify([{"id": c.id, "name": c.name} for c in customers]), 200
+
 
 
     # Building Routes
